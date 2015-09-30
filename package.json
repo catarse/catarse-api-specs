@@ -4,11 +4,12 @@
   "description": "Catarse API specifications",
   "main": "index.js",
   "dependencies": {
-    "frisby": "^0.8.5"
+    "frisby": "^0.8.5",
+    "jasmine-node": "^1.14.5"
   },
   "devDependencies": {},
   "scripts": {
-    "test": "jasmine-node spec/ --junitreport"
+    "test": "./node_modules/.bin/jasmine-node spec/ --junitreport"
   },
   "repository": {
     "type": "git",
