@@ -1,3 +1,3 @@
-test:
-  override:
-    - jasmine-node spec/ --junitreport
+machine:
+  node:
+      version: 4.1.0
