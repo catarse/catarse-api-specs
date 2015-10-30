@@ -1,6 +1,6 @@
 #!/bin/bash
 
-db=$1
+db=${1-'catarse_api_test'}
 user=`whoami`
 port=8888
 
