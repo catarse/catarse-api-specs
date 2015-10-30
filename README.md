@@ -34,3 +34,17 @@ and run the tests to check if everything is still working.
 ```
 database/recreate_schema.sh database_name
 ```
+
+## Adding tests
+
+The tests are organized in files by endpoint, so you should
+never test more than one endpoint per yml file.
+Add the test file named after the endpoint you are testing, if you are
+testing the endpoint **foo**, the test file will be **test/foo.yml**.
+
+To bootstrap a basic get test against the foo endpoint use the command:
+
+```
+./generate_test.sh foo
+```
+
