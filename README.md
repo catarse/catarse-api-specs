@@ -8,8 +8,8 @@
 * [pyresttest](https://github.com/svanoort/pyresttest)
 
 The scripts assume that you have a PostgreSQL running in your local environment
-and that you have a database superuser that can connect to the database server
-without using a password.
+and that you have a database superuser with the same name as the user running the script
+that can connect to the database server without using a password.
 If you need to use a password to connect try setting up a [pgpass](http://www.postgresql.org/docs/current/static/libpq-pgpass.html) file.
 
 ## Running tests
