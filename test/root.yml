@@ -1,6 +1,6 @@
 ---
 - config:
-  - testset: "Basic tests"
+  - testset: "Root"
 
 - test:
   - name: "Basic get"
