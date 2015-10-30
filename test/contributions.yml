@@ -5,4 +5,3 @@
 - test:
   - name: "Basic get"
   - url: "/contributions"
-  - expected_status: [404]
