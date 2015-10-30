@@ -5,3 +5,4 @@
 - test:
   - name: "Basic get"
   - url: "/project_reminders"
+  - expected_status: [404]

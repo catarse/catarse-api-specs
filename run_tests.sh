@@ -20,6 +20,12 @@ if [[ "$postgrest_bin" == "unknown" ]]; then
   echo "Platform $unamestr is not supported by the postgrest binaries."
 fi
 
+echo "Initiating database users..."
+createuser --no-login web_user > /dev/null 2>&1
+createuser --no-login admin > /dev/null 2>&1
+createuser --no-login anonymous > /dev/null 2>&1
+createuser postgrest -g admin -g web_user -g anonymous > /dev/null 2>&1
+
 echo "Initiating database schema..."
 dropdb --if-exists $db
 createdb $db
@@ -27,7 +33,7 @@ psql $db < ./database/schema.sql > logs/schema_load.log 2>&1
 psql -v db=$db $db < ./database/data.sql > logs/schema_load.log 2>&1
 
 echo "Initiating PostgREST server..."
-./$dir/$postgrest_bin -d $db -U $user -a $user -p $port --jwt-secret iksjhdfsdk > logs/postgrest.log 2>&1 &
+./$dir/$postgrest_bin -d $db -U postgrest -a anonymous -p $port --jwt-secret iksjhdfsdk > logs/postgrest.log 2>&1 &
 
 echo "Running tests..."
 sleep 1
