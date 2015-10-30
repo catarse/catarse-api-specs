@@ -24,21 +24,23 @@ echo "Initiating database schema..."
 dropdb --if-exists $db
 createdb $db
 psql $db < ./database/schema.sql > logs/schema_load.log 2>&1
-psql $db < ./database/data.sql > logs/schema_load.log 2>&1
+psql -v db=$db $db < ./database/data.sql > logs/schema_load.log 2>&1
 
 echo "Initiating PostgREST server..."
 ./$dir/$postgrest_bin -d $db -U $user -a $user -p $port --jwt-secret iksjhdfsdk > logs/postgrest.log 2>&1 &
 
-echo "Running tests"
+echo "Running tests..."
 sleep 1
 for f in test/*.yml
 do
-    echo "Running $f tests..."
+    echo ""
+    echo "$f..."
     pyresttest http://localhost:$port $f
     if [[ $? -eq 1 ]]; then
         exit_code=1
     fi
 done
+echo ""
 
 echo "Terminating PostgREST server..."
 killall $postgrest_bin

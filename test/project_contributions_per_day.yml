@@ -1,0 +1,7 @@
+---
+- config:
+  - testset: "project_contributions_per_day"
+
+- test:
+  - name: "Basic get"
+  - url: "/project_contributions_per_day"

@@ -1,0 +1,7 @@
+---
+- config:
+  - testset: "reward_details"
+
+- test:
+  - name: "Basic get"
+  - url: "/reward_details"

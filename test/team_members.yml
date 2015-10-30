@@ -1,0 +1,7 @@
+---
+- config:
+  - testset: "team_members"
+
+- test:
+  - name: "Basic get"
+  - url: "/team_members"

@@ -1,0 +1,7 @@
+---
+- config:
+  - testset: "user_details"
+
+- test:
+  - name: "Basic get"
+  - url: "/user_details"
