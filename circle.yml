@@ -1,3 +1,12 @@
 machine:
-  node:
-      version: 4.1.0
+  python:
+    version: 2.7
+
+dependencies:
+  pre:
+      - pip install pyresttest
+
+test:
+  override:
+    - ./run_tests.sh api_test
+
