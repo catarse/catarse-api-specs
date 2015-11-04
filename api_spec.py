@@ -8,8 +8,9 @@ def cli():
 
 
 @cli.command()
-def run_tests():
-    subprocess.call(['./run_tests.sh'])
+@click.argument('name', default='api_test')
+def run_tests(name):
+    subprocess.call(['./run_tests.sh', name])
 
 
 @cli.command()
