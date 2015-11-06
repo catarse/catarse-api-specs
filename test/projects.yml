@@ -5,3 +5,15 @@
 - test:
   - name: "Basic get"
   - url: "/projects"
+
+- test:
+  - name: "Project mode should be all_or_nothing"
+  - url: "/projects?project_id=eq.1"
+  - validators:
+    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'all_or_nothing'}
+
+- test:
+  - name: "Project mode should be flexible"
+  - url: "/projects?project_id=eq.2"
+  - validators:
+    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'flexible'}

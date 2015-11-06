@@ -589,171 +589,6 @@ CREATE FUNCTION mode(project projects) RETURNS text
 
 
 --
--- Name: remaining_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION remaining_time_json(projects) RETURNS json
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-            select (
-              case
-              when $1.is_expired then
-                json_build_object('total', 0, 'unit', 'seconds')
-              else
-                case
-                when $1.remaining_time_interval >= '1 day'::interval then
-                  json_build_object('total', extract(day from $1.remaining_time_interval), 'unit', 'days')
-                when $1.remaining_time_interval >= '1 hour'::interval and $1.remaining_time_interval < '24 hours'::interval then
-                  json_build_object('total', extract(hour from $1.remaining_time_interval), 'unit', 'hours')
-                when $1.remaining_time_interval >= '1 minute'::interval and $1.remaining_time_interval < '60 minutes'::interval then
-                  json_build_object('total', extract(minutes from $1.remaining_time_interval), 'unit', 'minutes')
-                when $1.remaining_time_interval < '60 seconds'::interval then
-                  json_build_object('total', extract(seconds from $1.remaining_time_interval), 'unit', 'seconds')
-                 else json_build_object('total', 0, 'unit', 'seconds') end
-              end
-            )
-        $_$;
-
-
---
--- Name: thumbnail_image(projects, text); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION thumbnail_image(projects, size text) RETURNS text
-    LANGUAGE sql STABLE
-    AS $_$
-                SELECT
-                  'https://' || settings('aws_host')  ||
-                  '/' || settings('aws_bucket') ||
-                  '/uploads/project/uploaded_image/' || $1.id::text ||
-                  '/project_thumb_' || size || '_' || $1.uploaded_image
-            $_$;
-
-
-SET search_path = "1", pg_catalog;
-
---
--- Name: project_totals; Type: TABLE; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE TABLE project_totals (
-    project_id integer,
-    pledged numeric,
-    progress numeric,
-    total_payment_service_fee numeric,
-    total_contributions bigint
-);
-
-ALTER TABLE ONLY project_totals REPLICA IDENTITY NOTHING;
-
-
-SET search_path = public, pg_catalog;
-
---
--- Name: cities; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE cities (
-    id integer NOT NULL,
-    name text NOT NULL,
-    state_id integer NOT NULL
-);
-
-
---
--- Name: project_accounts; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE project_accounts (
-    id integer NOT NULL,
-    project_id integer NOT NULL,
-    bank_id integer,
-    email text NOT NULL,
-    state_inscription text,
-    address_street text NOT NULL,
-    address_number text NOT NULL,
-    address_complement text,
-    address_city text NOT NULL,
-    address_neighbourhood text NOT NULL,
-    address_state text NOT NULL,
-    address_zip_code text NOT NULL,
-    phone_number text NOT NULL,
-    agency text NOT NULL,
-    agency_digit text NOT NULL,
-    account text NOT NULL,
-    account_digit text NOT NULL,
-    owner_name text NOT NULL,
-    owner_document text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    account_type text,
-    CONSTRAINT project_accounts_agency_check CHECK ((length(agency) >= 4))
-);
-
-
---
--- Name: states; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE states (
-    id integer NOT NULL,
-    name character varying(255) NOT NULL,
-    acronym character varying(255) NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    CONSTRAINT states_acronym_not_blank CHECK ((length(btrim((acronym)::text)) > 0)),
-    CONSTRAINT states_name_not_blank CHECK ((length(btrim((name)::text)) > 0))
-);
-
-
-SET search_path = "1", pg_catalog;
-
---
--- Name: projects; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW projects AS
- SELECT p.id AS project_id,
-    p.name AS project_name,
-    p.headline,
-    p.permalink,
-    p.state,
-    p.online_date,
-    p.recommended,
-    public.thumbnail_image(p.*, 'large'::text) AS project_img,
-    public.remaining_time_json(p.*) AS remaining_time,
-    p.expires_at,
-    COALESCE(( SELECT pt.pledged
-           FROM project_totals pt
-          WHERE (pt.project_id = p.id)), (0)::numeric) AS pledged,
-    COALESCE(( SELECT pt.progress
-           FROM project_totals pt
-          WHERE (pt.project_id = p.id)), (0)::numeric) AS progress,
-    COALESCE(s.acronym, (pa.address_state)::character varying(255)) AS state_acronym,
-    u.name AS owner_name,
-    COALESCE(c.name, pa.address_city) AS city_name
-   FROM ((((public.projects p
-     JOIN public.users u ON ((p.user_id = u.id)))
-     LEFT JOIN public.project_accounts pa ON ((pa.project_id = p.id)))
-     LEFT JOIN public.cities c ON ((c.id = p.city_id)))
-     LEFT JOIN public.states s ON ((s.id = c.state_id)));
-
-
-SET search_path = public, pg_catalog;
-
---
--- Name: near_me("1".projects); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION near_me("1".projects) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-          SELECT 
-      COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = nullif(current_setting('user_vars.user_id'), '')::int)
-        $_$;
-
-
---
 -- Name: notify_about_confirmed_payments(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -865,6 +700,33 @@ CREATE FUNCTION remaining_time_interval(projects) RETURNS interval
 
 
 --
+-- Name: remaining_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION remaining_time_json(projects) RETURNS json
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+            select (
+              case
+              when $1.is_expired then
+                json_build_object('total', 0, 'unit', 'seconds')
+              else
+                case
+                when $1.remaining_time_interval >= '1 day'::interval then
+                  json_build_object('total', extract(day from $1.remaining_time_interval), 'unit', 'days')
+                when $1.remaining_time_interval >= '1 hour'::interval and $1.remaining_time_interval < '24 hours'::interval then
+                  json_build_object('total', extract(hour from $1.remaining_time_interval), 'unit', 'hours')
+                when $1.remaining_time_interval >= '1 minute'::interval and $1.remaining_time_interval < '60 minutes'::interval then
+                  json_build_object('total', extract(minutes from $1.remaining_time_interval), 'unit', 'minutes')
+                when $1.remaining_time_interval < '60 seconds'::interval then
+                  json_build_object('total', extract(seconds from $1.remaining_time_interval), 'unit', 'seconds')
+                 else json_build_object('total', 0, 'unit', 'seconds') end
+              end
+            )
+        $_$;
+
+
+--
 -- Name: sent_validation(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -961,6 +823,21 @@ CREATE FUNCTION thumbnail_image(users) RETURNS text
               '/' || (SELECT value FROM settings WHERE name = 'aws_bucket') ||
               '/uploads/user/uploaded_image/' || $1.id::text ||
               '/thumb_avatar_' || $1.uploaded_image
+            $_$;
+
+
+--
+-- Name: thumbnail_image(projects, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION thumbnail_image(projects, size text) RETURNS text
+    LANGUAGE sql STABLE
+    AS $_$
+                SELECT
+                  'https://' || settings('aws_host')  ||
+                  '/' || settings('aws_bucket') ||
+                  '/uploads/project/uploaded_image/' || $1.id::text ||
+                  '/project_thumb_' || size || '_' || $1.uploaded_image
             $_$;
 
 
@@ -1463,6 +1340,21 @@ ALTER TABLE ONLY project_contributions_per_location REPLICA IDENTITY NOTHING;
 
 
 --
+-- Name: project_totals; Type: TABLE; Schema: 1; Owner: -; Tablespace: 
+--
+
+CREATE TABLE project_totals (
+    project_id integer,
+    pledged numeric,
+    progress numeric,
+    total_payment_service_fee numeric,
+    total_contributions bigint
+);
+
+ALTER TABLE ONLY project_totals REPLICA IDENTITY NOTHING;
+
+
+--
 -- Name: project_contributions_per_ref; Type: VIEW; Schema: 1; Owner: -
 --
 
@@ -1605,6 +1497,114 @@ CREATE VIEW project_reminders AS
     pn.user_id
    FROM public.project_notifications pn
   WHERE ((pn.template_name = 'reminder'::text) AND public.is_owner_or_admin(pn.user_id));
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: cities; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE cities (
+    id integer NOT NULL,
+    name text NOT NULL,
+    state_id integer NOT NULL
+);
+
+
+--
+-- Name: flexible_projects; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE flexible_projects (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    state text DEFAULT 'draft'::text NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: project_accounts; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE project_accounts (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    bank_id integer,
+    email text NOT NULL,
+    state_inscription text,
+    address_street text NOT NULL,
+    address_number text NOT NULL,
+    address_complement text,
+    address_city text NOT NULL,
+    address_neighbourhood text NOT NULL,
+    address_state text NOT NULL,
+    address_zip_code text NOT NULL,
+    phone_number text NOT NULL,
+    agency text NOT NULL,
+    agency_digit text NOT NULL,
+    account text NOT NULL,
+    account_digit text NOT NULL,
+    owner_name text NOT NULL,
+    owner_document text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    account_type text,
+    CONSTRAINT project_accounts_agency_check CHECK ((length(agency) >= 4))
+);
+
+
+--
+-- Name: states; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE states (
+    id integer NOT NULL,
+    name character varying(255) NOT NULL,
+    acronym character varying(255) NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    CONSTRAINT states_acronym_not_blank CHECK ((length(btrim((acronym)::text)) > 0)),
+    CONSTRAINT states_name_not_blank CHECK ((length(btrim((name)::text)) > 0))
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: projects; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW projects AS
+ SELECT p.id AS project_id,
+    p.name AS project_name,
+    p.headline,
+    p.permalink,
+    public.mode(p.*) AS mode,
+    COALESCE(fp.state, (p.state)::text) AS state,
+    public.state_order(p.*) AS state_order,
+    p.online_date,
+    p.recommended,
+    public.thumbnail_image(p.*, 'large'::text) AS project_img,
+    public.remaining_time_json(p.*) AS remaining_time,
+    p.expires_at,
+    COALESCE(( SELECT pt.pledged
+           FROM project_totals pt
+          WHERE (pt.project_id = p.id)), (0)::numeric) AS pledged,
+    COALESCE(( SELECT pt.progress
+           FROM project_totals pt
+          WHERE (pt.project_id = p.id)), (0)::numeric) AS progress,
+    COALESCE(s.acronym, (pa.address_state)::character varying(255)) AS state_acronym,
+    u.name AS owner_name,
+    COALESCE(c.name, pa.address_city) AS city_name
+   FROM (((((public.projects p
+     JOIN public.users u ON ((p.user_id = u.id)))
+     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+     LEFT JOIN public.project_accounts pa ON ((pa.project_id = p.id)))
+     LEFT JOIN public.cities c ON ((c.id = p.city_id)))
+     LEFT JOIN public.states s ON ((s.id = c.state_id)));
 
 
 --
@@ -2600,19 +2600,6 @@ CREATE VIEW financial_reports AS
 CREATE TABLE flexible_project_states (
     state text NOT NULL,
     state_order project_state_order NOT NULL
-);
-
-
---
--- Name: flexible_projects; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE flexible_projects (
-    id integer NOT NULL,
-    project_id integer NOT NULL,
-    state text DEFAULT 'draft'::text NOT NULL,
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone
 );
 
 
@@ -5627,29 +5614,6 @@ GRANT SELECT ON TABLE payments TO admin;
 SET search_path = "1", pg_catalog;
 
 --
--- Name: project_totals; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE project_totals FROM PUBLIC;
-REVOKE ALL ON TABLE project_totals FROM ton;
-GRANT ALL ON TABLE project_totals TO ton;
-GRANT SELECT ON TABLE project_totals TO admin;
-GRANT SELECT ON TABLE project_totals TO web_user;
-
-
---
--- Name: projects; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM ton;
-GRANT ALL ON TABLE projects TO ton;
-GRANT SELECT ON TABLE projects TO anonymous;
-GRANT SELECT ON TABLE projects TO web_user;
-GRANT SELECT ON TABLE projects TO admin;
-
-
---
 -- Name: contribution_details; Type: ACL; Schema: 1; Owner: -
 --
 
@@ -5753,6 +5717,17 @@ GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 
 
 --
+-- Name: project_totals; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE project_totals FROM PUBLIC;
+REVOKE ALL ON TABLE project_totals FROM ton;
+GRANT ALL ON TABLE project_totals TO ton;
+GRANT SELECT ON TABLE project_totals TO admin;
+GRANT SELECT ON TABLE project_totals TO web_user;
+
+
+--
 -- Name: project_contributions_per_ref; Type: ACL; Schema: 1; Owner: -
 --
 
@@ -5812,6 +5787,34 @@ REVOKE ALL ON TABLE project_reminders FROM ton;
 GRANT ALL ON TABLE project_reminders TO ton;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: flexible_projects; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
+REVOKE ALL ON TABLE flexible_projects FROM ton;
+GRANT ALL ON TABLE flexible_projects TO ton;
+GRANT SELECT ON TABLE flexible_projects TO admin;
+GRANT SELECT ON TABLE flexible_projects TO web_user;
+GRANT SELECT ON TABLE flexible_projects TO anonymous;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: projects; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE projects FROM PUBLIC;
+REVOKE ALL ON TABLE projects FROM ton;
+GRANT ALL ON TABLE projects TO ton;
+GRANT SELECT ON TABLE projects TO admin;
+GRANT SELECT ON TABLE projects TO web_user;
+GRANT SELECT ON TABLE projects TO anonymous;
 
 
 --
@@ -5925,18 +5928,6 @@ GRANT ALL ON TABLE flexible_project_states TO ton;
 GRANT SELECT ON TABLE flexible_project_states TO admin;
 GRANT SELECT ON TABLE flexible_project_states TO web_user;
 GRANT SELECT ON TABLE flexible_project_states TO anonymous;
-
-
---
--- Name: flexible_projects; Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
-REVOKE ALL ON TABLE flexible_projects FROM ton;
-GRANT ALL ON TABLE flexible_projects TO ton;
-GRANT SELECT ON TABLE flexible_projects TO admin;
-GRANT SELECT ON TABLE flexible_projects TO web_user;
-GRANT SELECT ON TABLE flexible_projects TO anonymous;
 
 
 --
