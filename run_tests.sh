@@ -42,7 +42,7 @@ do
     echo ""
     echo "$f..."
     pyresttest http://localhost:$port $f
-    if [[ $? -eq 1 ]]; then
+    if [[ $? -ne 0 ]]; then
         exit_code=1
     fi
 done
