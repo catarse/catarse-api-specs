@@ -12,6 +12,15 @@ INSERT INTO public.project_states (state, state_order) VALUES
     ('failed', 'finished'),
     ('successful', 'finished');
 
+INSERT INTO public.flexible_project_states (state, state_order) VALUES
+    ('deleted', 'archived'),
+    ('rejected', 'created'),
+    ('draft', 'created'),
+    ('online', 'published'),
+    ('waiting_funds', 'published'),
+    ('successful', 'finished');
+
+
 INSERT INTO public.states (id, name, acronym) VALUES
     (1, 'Rio de Janeiro', 'RJ');
 
@@ -30,8 +39,8 @@ INSERT INTO public.projects (id, name, user_id, category_id, permalink) VALUES
 INSERT INTO public.projects (id, name, user_id, category_id, permalink) VALUES
     (2, 'Projeto flexível', 1, 1, 'flexivel');
 
-INSERT INTO public.flexible_projects (id) VALUES
-    (2);
+INSERT INTO public.flexible_projects (id, project_id) VALUES
+    (1, 2);
 
 -- Refresh all materialized views
 REFRESH MATERIALIZED VIEW "1".user_totals;
