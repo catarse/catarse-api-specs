@@ -11,7 +11,6 @@ SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SET check_function_bodies = false;
 SET client_min_messages = warning;
-SET row_security = off;
 
 --
 -- Name: 1; Type: SCHEMA; Schema: -; Owner: -
@@ -6598,8 +6597,6 @@ ALTER TABLE ONLY project_posts
 --
 
 REVOKE ALL ON SCHEMA "1" FROM PUBLIC;
-REVOKE ALL ON SCHEMA "1" FROM diogo;
-GRANT ALL ON SCHEMA "1" TO diogo;
 GRANT ALL ON SCHEMA "1" TO catarse;
 GRANT USAGE ON SCHEMA "1" TO admin;
 GRANT USAGE ON SCHEMA "1" TO web_user;
@@ -6611,8 +6608,6 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM diogo;
-GRANT ALL ON SCHEMA public TO diogo;
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
@@ -6622,8 +6617,6 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM diogo;
-GRANT ALL ON TABLE projects TO diogo;
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
@@ -6637,8 +6630,6 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_totals FROM PUBLIC;
-REVOKE ALL ON TABLE project_totals FROM diogo;
-GRANT ALL ON TABLE project_totals TO diogo;
 GRANT ALL ON TABLE project_totals TO catarse;
 GRANT SELECT ON TABLE project_totals TO admin;
 GRANT SELECT ON TABLE project_totals TO web_user;
@@ -6651,8 +6642,6 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
-REVOKE ALL ON TABLE flexible_projects FROM diogo;
-GRANT ALL ON TABLE flexible_projects TO diogo;
 GRANT SELECT ON TABLE flexible_projects TO admin;
 GRANT SELECT ON TABLE flexible_projects TO web_user;
 GRANT SELECT ON TABLE flexible_projects TO anonymous;
@@ -6663,8 +6652,6 @@ GRANT SELECT ON TABLE flexible_projects TO anonymous;
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
-REVOKE ALL ON TABLE users FROM diogo;
-GRANT ALL ON TABLE users TO diogo;
 GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
 
@@ -6674,7 +6661,6 @@ GRANT SELECT ON TABLE users TO admin;
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-REVOKE ALL(deactivated_at) ON TABLE users FROM diogo;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
@@ -6685,8 +6671,6 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM diogo;
-GRANT ALL ON TABLE projects TO diogo;
 GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO anonymous;
@@ -6699,8 +6683,6 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE payments FROM PUBLIC;
-REVOKE ALL ON TABLE payments FROM diogo;
-GRANT ALL ON TABLE payments TO diogo;
 GRANT ALL ON TABLE payments TO catarse;
 GRANT SELECT ON TABLE payments TO admin;
 
@@ -6712,8 +6694,6 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
-REVOKE ALL ON TABLE categories FROM diogo;
-GRANT ALL ON TABLE categories TO diogo;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
@@ -6724,8 +6704,6 @@ GRANT SELECT ON TABLE categories TO anonymous;
 --
 
 REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-REVOKE ALL ON TABLE category_totals FROM diogo;
-GRANT ALL ON TABLE category_totals TO diogo;
 GRANT ALL ON TABLE category_totals TO catarse;
 GRANT SELECT ON TABLE category_totals TO admin;
 
@@ -6735,8 +6713,6 @@ GRANT SELECT ON TABLE category_totals TO admin;
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
-REVOKE ALL ON TABLE contribution_details FROM diogo;
-GRANT ALL ON TABLE contribution_details TO diogo;
 GRANT ALL ON TABLE contribution_details TO catarse;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 
@@ -6746,8 +6722,8 @@ GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 --
 
 REVOKE ALL ON TABLE contribution_reports FROM PUBLIC;
-REVOKE ALL ON TABLE contribution_reports FROM diogo;
-GRANT ALL ON TABLE contribution_reports TO diogo;
+
+
 GRANT ALL ON TABLE contribution_reports TO catarse;
 GRANT SELECT ON TABLE contribution_reports TO admin;
 GRANT SELECT ON TABLE contribution_reports TO web_user;
@@ -6760,8 +6736,8 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE settings FROM PUBLIC;
-REVOKE ALL ON TABLE settings FROM diogo;
-GRANT ALL ON TABLE settings TO diogo;
+
+
 GRANT ALL ON TABLE settings TO catarse;
 GRANT SELECT ON TABLE settings TO admin;
 
@@ -6773,8 +6749,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM PUBLIC;
-REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM diogo;
-GRANT ALL ON TABLE contribution_reports_for_project_owners TO diogo;
+
+
 GRANT ALL ON TABLE contribution_reports_for_project_owners TO catarse;
 GRANT SELECT ON TABLE contribution_reports_for_project_owners TO admin;
 
@@ -6784,8 +6760,8 @@ GRANT SELECT ON TABLE contribution_reports_for_project_owners TO admin;
 --
 
 REVOKE ALL ON TABLE contributions FROM PUBLIC;
-REVOKE ALL ON TABLE contributions FROM diogo;
-GRANT ALL ON TABLE contributions TO diogo;
+
+
 GRANT ALL ON TABLE contributions TO catarse;
 GRANT ALL ON TABLE contributions TO admin;
 
@@ -6795,8 +6771,8 @@ GRANT ALL ON TABLE contributions TO admin;
 --
 
 REVOKE ALL ON TABLE financial_reports FROM PUBLIC;
-REVOKE ALL ON TABLE financial_reports FROM diogo;
-GRANT ALL ON TABLE financial_reports TO diogo;
+
+
 GRANT ALL ON TABLE financial_reports TO catarse;
 GRANT SELECT ON TABLE financial_reports TO admin;
 GRANT SELECT ON TABLE financial_reports TO web_user;
@@ -6807,8 +6783,8 @@ GRANT SELECT ON TABLE financial_reports TO web_user;
 --
 
 REVOKE ALL ON TABLE user_totals FROM PUBLIC;
-REVOKE ALL ON TABLE user_totals FROM diogo;
-GRANT ALL ON TABLE user_totals TO diogo;
+
+
 GRANT ALL ON TABLE user_totals TO catarse;
 GRANT SELECT ON TABLE user_totals TO anonymous;
 GRANT SELECT ON TABLE user_totals TO admin;
@@ -6820,8 +6796,8 @@ GRANT SELECT ON TABLE user_totals TO web_user;
 --
 
 REVOKE ALL ON TABLE project_contributions FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions FROM diogo;
-GRANT ALL ON TABLE project_contributions TO diogo;
+
+
 GRANT ALL ON TABLE project_contributions TO catarse;
 GRANT SELECT ON TABLE project_contributions TO anonymous;
 GRANT SELECT ON TABLE project_contributions TO web_user;
@@ -6833,8 +6809,8 @@ GRANT SELECT ON TABLE project_contributions TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_day FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_day FROM diogo;
-GRANT ALL ON TABLE project_contributions_per_day TO diogo;
+
+
 GRANT ALL ON TABLE project_contributions_per_day TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_day TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_day TO web_user;
@@ -6846,8 +6822,8 @@ GRANT SELECT ON TABLE project_contributions_per_day TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_location FROM diogo;
-GRANT ALL ON TABLE project_contributions_per_location TO diogo;
+
+
 GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
@@ -6859,8 +6835,8 @@ GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_ref FROM diogo;
-GRANT ALL ON TABLE project_contributions_per_ref TO diogo;
+
+
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
@@ -6871,8 +6847,8 @@ GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 --
 
 REVOKE ALL ON TABLE project_details FROM PUBLIC;
-REVOKE ALL ON TABLE project_details FROM diogo;
-GRANT ALL ON TABLE project_details TO diogo;
+
+
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
@@ -6883,8 +6859,8 @@ GRANT SELECT ON TABLE project_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
-REVOKE ALL ON TABLE project_financials FROM diogo;
-GRANT ALL ON TABLE project_financials TO diogo;
+
+
 GRANT ALL ON TABLE project_financials TO catarse;
 GRANT SELECT ON TABLE project_financials TO admin;
 GRANT SELECT ON TABLE project_financials TO web_user;
@@ -6895,8 +6871,8 @@ GRANT SELECT ON TABLE project_financials TO web_user;
 --
 
 REVOKE ALL ON TABLE project_posts_details FROM PUBLIC;
-REVOKE ALL ON TABLE project_posts_details FROM diogo;
-GRANT ALL ON TABLE project_posts_details TO diogo;
+
+
 GRANT ALL ON TABLE project_posts_details TO catarse;
 GRANT SELECT ON TABLE project_posts_details TO admin;
 GRANT SELECT ON TABLE project_posts_details TO web_user;
@@ -6910,8 +6886,8 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_notifications FROM PUBLIC;
-REVOKE ALL ON TABLE project_notifications FROM diogo;
-GRANT ALL ON TABLE project_notifications TO diogo;
+
+
 GRANT ALL ON TABLE project_notifications TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO admin;
@@ -6924,8 +6900,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
-REVOKE ALL ON TABLE project_reminders FROM diogo;
-GRANT ALL ON TABLE project_reminders TO diogo;
+
+
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
@@ -6936,8 +6912,8 @@ GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 --
 
 REVOKE ALL ON TABLE projects_for_home FROM PUBLIC;
-REVOKE ALL ON TABLE projects_for_home FROM diogo;
-GRANT ALL ON TABLE projects_for_home TO diogo;
+
+
 GRANT ALL ON TABLE projects_for_home TO catarse;
 GRANT SELECT ON TABLE projects_for_home TO admin;
 GRANT SELECT ON TABLE projects_for_home TO web_user;
@@ -6948,8 +6924,8 @@ GRANT SELECT ON TABLE projects_for_home TO web_user;
 --
 
 REVOKE ALL ON TABLE recommendations FROM PUBLIC;
-REVOKE ALL ON TABLE recommendations FROM diogo;
-GRANT ALL ON TABLE recommendations TO diogo;
+
+
 GRANT ALL ON TABLE recommendations TO catarse;
 GRANT SELECT ON TABLE recommendations TO admin;
 GRANT SELECT ON TABLE recommendations TO web_user;
@@ -6960,8 +6936,8 @@ GRANT SELECT ON TABLE recommendations TO web_user;
 --
 
 REVOKE ALL ON TABLE referral_totals FROM PUBLIC;
-REVOKE ALL ON TABLE referral_totals FROM diogo;
-GRANT ALL ON TABLE referral_totals TO diogo;
+
+
 GRANT ALL ON TABLE referral_totals TO catarse;
 GRANT SELECT ON TABLE referral_totals TO admin;
 
@@ -6971,8 +6947,8 @@ GRANT SELECT ON TABLE referral_totals TO admin;
 --
 
 REVOKE ALL ON TABLE reward_details FROM PUBLIC;
-REVOKE ALL ON TABLE reward_details FROM diogo;
-GRANT ALL ON TABLE reward_details TO diogo;
+
+
 GRANT ALL ON TABLE reward_details TO catarse;
 GRANT SELECT ON TABLE reward_details TO admin;
 GRANT SELECT ON TABLE reward_details TO web_user;
@@ -6984,8 +6960,8 @@ GRANT SELECT ON TABLE reward_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE statistics FROM PUBLIC;
-REVOKE ALL ON TABLE statistics FROM diogo;
-GRANT ALL ON TABLE statistics TO diogo;
+
+
 GRANT ALL ON TABLE statistics TO catarse;
 GRANT SELECT ON TABLE statistics TO admin;
 GRANT SELECT ON TABLE statistics TO web_user;
@@ -6997,8 +6973,8 @@ GRANT SELECT ON TABLE statistics TO anonymous;
 --
 
 REVOKE ALL ON TABLE team_members FROM PUBLIC;
-REVOKE ALL ON TABLE team_members FROM diogo;
-GRANT ALL ON TABLE team_members TO diogo;
+
+
 GRANT ALL ON TABLE team_members TO catarse;
 GRANT SELECT ON TABLE team_members TO web_user;
 GRANT SELECT ON TABLE team_members TO admin;
@@ -7010,8 +6986,8 @@ GRANT SELECT ON TABLE team_members TO anonymous;
 --
 
 REVOKE ALL ON TABLE team_totals FROM PUBLIC;
-REVOKE ALL ON TABLE team_totals FROM diogo;
-GRANT ALL ON TABLE team_totals TO diogo;
+
+
 GRANT ALL ON TABLE team_totals TO catarse;
 GRANT SELECT ON TABLE team_totals TO admin;
 GRANT SELECT ON TABLE team_totals TO web_user;
@@ -7023,8 +6999,8 @@ GRANT SELECT ON TABLE team_totals TO anonymous;
 --
 
 REVOKE ALL ON TABLE user_credits FROM PUBLIC;
-REVOKE ALL ON TABLE user_credits FROM diogo;
-GRANT ALL ON TABLE user_credits TO diogo;
+
+
 GRANT ALL ON TABLE user_credits TO catarse;
 GRANT SELECT ON TABLE user_credits TO admin;
 GRANT SELECT ON TABLE user_credits TO web_user;
@@ -7035,8 +7011,8 @@ GRANT SELECT ON TABLE user_credits TO web_user;
 --
 
 REVOKE ALL ON TABLE user_details FROM PUBLIC;
-REVOKE ALL ON TABLE user_details FROM diogo;
-GRANT ALL ON TABLE user_details TO diogo;
+
+
 GRANT SELECT ON TABLE user_details TO PUBLIC;
 
 
@@ -7045,8 +7021,8 @@ GRANT SELECT ON TABLE user_details TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
-REVOKE ALL ON TABLE users FROM diogo;
-GRANT ALL ON TABLE users TO diogo;
+
+
 GRANT SELECT ON TABLE users TO admin;
 
 
@@ -7055,7 +7031,7 @@ GRANT SELECT ON TABLE users TO admin;
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-REVOKE ALL(deactivated_at) ON TABLE users FROM diogo;
+
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
@@ -7064,8 +7040,8 @@ GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 --
 
 REVOKE ALL ON TABLE year_totals FROM PUBLIC;
-REVOKE ALL ON TABLE year_totals FROM diogo;
-GRANT ALL ON TABLE year_totals TO diogo;
+
+
 GRANT ALL ON TABLE year_totals TO catarse;
 GRANT SELECT ON TABLE year_totals TO admin;
 GRANT SELECT ON TABLE year_totals TO web_user;
@@ -7078,8 +7054,8 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE flexible_project_states FROM PUBLIC;
-REVOKE ALL ON TABLE flexible_project_states FROM diogo;
-GRANT ALL ON TABLE flexible_project_states TO diogo;
+
+
 GRANT SELECT ON TABLE flexible_project_states TO admin;
 GRANT SELECT ON TABLE flexible_project_states TO web_user;
 GRANT SELECT ON TABLE flexible_project_states TO anonymous;
@@ -7090,8 +7066,8 @@ GRANT SELECT ON TABLE flexible_project_states TO anonymous;
 --
 
 REVOKE ALL ON TABLE payment_logs FROM PUBLIC;
-REVOKE ALL ON TABLE payment_logs FROM diogo;
-GRANT ALL ON TABLE payment_logs TO diogo;
+
+
 GRANT ALL ON TABLE payment_logs TO catarse;
 GRANT SELECT ON TABLE payment_logs TO admin;
 GRANT SELECT ON TABLE payment_logs TO web_user;
@@ -7102,8 +7078,8 @@ GRANT SELECT ON TABLE payment_logs TO web_user;
 --
 
 REVOKE ALL ON TABLE payment_transfers FROM PUBLIC;
-REVOKE ALL ON TABLE payment_transfers FROM diogo;
-GRANT ALL ON TABLE payment_transfers TO diogo;
+
+
 GRANT ALL ON TABLE payment_transfers TO catarse;
 GRANT SELECT ON TABLE payment_transfers TO admin;
 GRANT SELECT ON TABLE payment_transfers TO web_user;
@@ -7114,8 +7090,8 @@ GRANT SELECT ON TABLE payment_transfers TO web_user;
 --
 
 REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM PUBLIC;
-REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM diogo;
-GRANT ALL ON SEQUENCE project_notifications_id_seq TO diogo;
+
+
 GRANT ALL ON SEQUENCE project_notifications_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO admin;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
@@ -7126,8 +7102,8 @@ GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
 --
 
 REVOKE ALL ON TABLE project_states FROM PUBLIC;
-REVOKE ALL ON TABLE project_states FROM diogo;
-GRANT ALL ON TABLE project_states TO diogo;
+
+
 GRANT SELECT ON TABLE project_states TO admin;
 GRANT SELECT ON TABLE project_states TO web_user;
 GRANT SELECT ON TABLE project_states TO anonymous;
