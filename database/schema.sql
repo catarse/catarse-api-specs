@@ -232,9 +232,9 @@ CREATE FUNCTION mode(project projects) RETURNS text
     AS $$
         SELECT
           CASE WHEN EXISTS ( SELECT 1 FROM flexible_projects WHERE project_id = project.id ) THEN
-            'flexible'
+            'flex'
           ELSE
-            'all_or_nothing'
+            'aon'
           END;
       $$;
 
@@ -246,23 +246,7 @@ CREATE FUNCTION mode(project projects) RETURNS text
 CREATE FUNCTION remaining_time_json(projects) RETURNS json
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            select (
-              case
-              when $1.is_expired then
-                json_build_object('total', 0, 'unit', 'seconds')
-              else
-                case
-                when $1.remaining_time_interval >= '1 day'::interval then
-                  json_build_object('total', extract(day from $1.remaining_time_interval), 'unit', 'days')
-                when $1.remaining_time_interval >= '1 hour'::interval and $1.remaining_time_interval < '24 hours'::interval then
-                  json_build_object('total', extract(hour from $1.remaining_time_interval), 'unit', 'hours')
-                when $1.remaining_time_interval >= '1 minute'::interval and $1.remaining_time_interval < '60 minutes'::interval then
-                  json_build_object('total', extract(minutes from $1.remaining_time_interval), 'unit', 'minutes')
-                when $1.remaining_time_interval < '60 seconds'::interval then
-                  json_build_object('total', extract(seconds from $1.remaining_time_interval), 'unit', 'seconds')
-                 else json_build_object('total', 0, 'unit', 'seconds') end
-              end
-            )
+            select public.interval_to_json($1.remaining_time_interval)
         $_$;
 
 
@@ -275,7 +259,7 @@ CREATE FUNCTION state_order(project projects) RETURNS project_state_order
     AS $$
 SELECT
     CASE project.mode
-    WHEN 'flexible' THEN
+    WHEN 'flex' THEN
         (
         SELECT state_order
         FROM
@@ -321,7 +305,8 @@ CREATE TABLE project_totals (
     pledged numeric,
     progress numeric,
     total_payment_service_fee numeric,
-    total_contributions bigint
+    total_contributions bigint,
+    total_contributors bigint
 );
 
 ALTER TABLE ONLY project_totals REPLICA IDENTITY NOTHING;
@@ -819,6 +804,17 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
 
 
 --
+-- Name: elapsed_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION elapsed_time_json(projects) RETURNS json
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_date)
+        $_$;
+
+
+--
 -- Name: categories; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -924,6 +920,33 @@ CREATE FUNCTION insert_project_reminder() RETURNS trigger
           return new;
         end;
       $$;
+
+
+--
+-- Name: interval_to_json(interval); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION interval_to_json(interval) RETURNS json
+    LANGUAGE sql IMMUTABLE SECURITY DEFINER
+    AS $_$
+            select (
+              case
+              when $1 <= '0 seconds'::interval then
+                json_build_object('total', 0, 'unit', 'seconds')
+              else
+                case
+                when $1 >= '1 day'::interval then
+                  json_build_object('total', extract(day from $1), 'unit', 'days')
+                when $1 >= '1 hour'::interval and $1 < '24 hours'::interval then
+                  json_build_object('total', extract(hour from $1), 'unit', 'hours')
+                when $1 >= '1 minute'::interval and $1 < '60 minutes'::interval then
+                  json_build_object('total', extract(minutes from $1), 'unit', 'minutes')
+                when $1 < '60 seconds'::interval then
+                  json_build_object('total', extract(seconds from $1), 'unit', 'seconds')
+                 else json_build_object('total', 0, 'unit', 'seconds') end
+              end
+            )
+        $_$;
 
 
 --
@@ -1856,6 +1879,7 @@ CREATE TABLE project_details (
     progress numeric,
     pledged numeric,
     total_contributions bigint,
+    total_contributors bigint,
     state text,
     mode text,
     state_order public.project_state_order,
@@ -1868,6 +1892,7 @@ CREATE TABLE project_details (
     open_for_contributions boolean,
     online_days integer,
     remaining_time json,
+    elapsed_time json,
     posts_count bigint,
     address json,
     "user" json,
@@ -5885,7 +5910,8 @@ CREATE RULE "_RETURN" AS
     sum(p.value) AS pledged,
     ((sum(p.value) / projects.goal) * (100)::numeric) AS progress,
     sum(p.gateway_fee) AS total_payment_service_fee,
-    count(DISTINCT c.id) AS total_contributions
+    count(DISTINCT c.id) AS total_contributions,
+    count(DISTINCT c.user_id) AS total_contributors
    FROM ((public.contributions c
      JOIN public.projects ON ((c.project_id = projects.id)))
      JOIN public.payments p ON ((p.contribution_id = c.id)))
@@ -5997,6 +6023,7 @@ CREATE RULE "_RETURN" AS
     COALESCE(pt.progress, (0)::numeric) AS progress,
     COALESCE(pt.pledged, (0)::numeric) AS pledged,
     COALESCE(pt.total_contributions, (0)::bigint) AS total_contributions,
+    COALESCE(pt.total_contributors, (0)::bigint) AS total_contributors,
     COALESCE(fp.state, (p.state)::text) AS state,
     public.mode(p.*) AS mode,
     public.state_order(p.*) AS state_order,
@@ -6009,6 +6036,7 @@ CREATE RULE "_RETURN" AS
     public.open_for_contributions(p.*) AS open_for_contributions,
     p.online_days,
     public.remaining_time_json(p.*) AS remaining_time,
+    public.elapsed_time_json(p.*) AS elapsed_time,
     ( SELECT count(pp_1.*) AS count
            FROM public.project_posts pp_1
           WHERE (pp_1.project_id = p.id)) AS posts_count,
@@ -6029,7 +6057,7 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.cities ct ON ((ct.id = p.city_id)))
      LEFT JOIN public.states st ON ((st.id = ct.state_id)))
      LEFT JOIN public.project_notifications pn ON ((pn.project_id = p.id)))
-  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state;
+  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
 
 
 --
@@ -6597,6 +6625,8 @@ ALTER TABLE ONLY project_posts
 --
 
 REVOKE ALL ON SCHEMA "1" FROM PUBLIC;
+
+
 GRANT ALL ON SCHEMA "1" TO catarse;
 GRANT USAGE ON SCHEMA "1" TO admin;
 GRANT USAGE ON SCHEMA "1" TO web_user;
@@ -6608,6 +6638,8 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
+
+
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
@@ -6617,31 +6649,21 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
+
+
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO PUBLIC;
 
 
-SET search_path = "1", pg_catalog;
-
---
--- Name: project_totals; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE project_totals FROM PUBLIC;
-GRANT ALL ON TABLE project_totals TO catarse;
-GRANT SELECT ON TABLE project_totals TO admin;
-GRANT SELECT ON TABLE project_totals TO web_user;
-
-
-SET search_path = public, pg_catalog;
-
 --
 -- Name: flexible_projects; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
+
+
 GRANT SELECT ON TABLE flexible_projects TO admin;
 GRANT SELECT ON TABLE flexible_projects TO web_user;
 GRANT SELECT ON TABLE flexible_projects TO anonymous;
@@ -6652,6 +6674,8 @@ GRANT SELECT ON TABLE flexible_projects TO anonymous;
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
+
+
 GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
 
@@ -6661,6 +6685,7 @@ GRANT SELECT ON TABLE users TO admin;
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
+
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
@@ -6671,6 +6696,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
+
+
 GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO anonymous;
@@ -6683,6 +6710,8 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE payments FROM PUBLIC;
+
+
 GRANT ALL ON TABLE payments TO catarse;
 GRANT SELECT ON TABLE payments TO admin;
 
@@ -6694,6 +6723,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
+
+
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
@@ -6704,8 +6735,10 @@ GRANT SELECT ON TABLE categories TO anonymous;
 --
 
 REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-GRANT ALL ON TABLE category_totals TO catarse;
+
+
 GRANT SELECT ON TABLE category_totals TO admin;
+GRANT ALL ON TABLE category_totals TO catarse;
 
 
 --
@@ -6713,6 +6746,8 @@ GRANT SELECT ON TABLE category_totals TO admin;
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
+
+
 GRANT ALL ON TABLE contribution_details TO catarse;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 
@@ -6824,10 +6859,10 @@ GRANT SELECT ON TABLE project_contributions_per_day TO admin;
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
 
 
-GRANT ALL ON TABLE project_contributions_per_location TO catarse;
-GRANT SELECT ON TABLE project_contributions_per_location TO admin;
-GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
+GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
+GRANT SELECT ON TABLE project_contributions_per_location TO admin;
+GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 
 
 --
@@ -6837,9 +6872,9 @@ GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
 
 
-GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
-GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
+GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
+GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
 
 
 --
@@ -6861,9 +6896,9 @@ GRANT SELECT ON TABLE project_details TO anonymous;
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
 
 
-GRANT ALL ON TABLE project_financials TO catarse;
-GRANT SELECT ON TABLE project_financials TO admin;
 GRANT SELECT ON TABLE project_financials TO web_user;
+GRANT SELECT ON TABLE project_financials TO admin;
+GRANT ALL ON TABLE project_financials TO catarse;
 
 
 --
