@@ -501,7 +501,11 @@ FROM
     "1".projects p
     JOIN public.projects pr ON pr.id = p.project_id
 WHERE
-    pr.full_text_index @@ to_tsquery('portuguese', unaccent(query))
+    (
+        pr.full_text_index @@ to_tsquery('portuguese', unaccent(query))
+        OR
+        pr.name % query
+    )
     AND pr.state NOT IN ('draft','rejected','deleted','in_analysis','approved')
 ORDER BY
     p.listing_order,
@@ -813,6 +817,69 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
       end loop;
       end;
       $$;
+
+
+--
+-- Name: categories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE categories (
+    id integer NOT NULL,
+    name_pt text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    name_en character varying(255),
+    name_fr character varying(255),
+    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
+);
+
+
+--
+-- Name: category_followers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE category_followers (
+    id integer NOT NULL,
+    category_id integer NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: categories; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW categories AS
+ SELECT c.id,
+    c.name_pt,
+    c.name_en,
+    ( SELECT count(*) AS count
+           FROM public.projects p
+          WHERE (((p.state)::text = 'online'::text) AND (p.category_id = c.id))) AS online_projects,
+    ( SELECT count(DISTINCT cf.user_id) AS count
+           FROM public.category_followers cf
+          WHERE (cf.category_id = c.id)) AS followers
+   FROM public.categories c
+  WHERE (EXISTS ( SELECT true AS bool
+           FROM public.projects p
+          WHERE ((p.category_id = c.id) AND ((p.state)::text <> ALL ((ARRAY['draft'::character varying, 'rejected'::character varying])::text[])))));
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: following_category("1".categories); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION following_category("1".categories) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+        SELECT EXISTS(SELECT true from category_followers cf WHERE cf.category_id = $1.id AND cf.user_id = nullif(current_setting('user_vars.user_id'), '')::int)
+      $_$;
 
 
 --
@@ -2621,21 +2688,6 @@ ALTER SEQUENCE banks_id_seq OWNED BY banks.id;
 
 
 --
--- Name: categories; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE categories (
-    id integer NOT NULL,
-    name_pt text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    name_en character varying(255),
-    name_fr character varying(255),
-    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
-);
-
-
---
 -- Name: categories_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2655,16 +2707,31 @@ ALTER SEQUENCE categories_id_seq OWNED BY categories.id;
 
 
 --
--- Name: category_followers; Type: TABLE; Schema: public; Owner: -
+-- Name: categories_views; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE category_followers (
-    id integer NOT NULL,
-    category_id integer NOT NULL,
-    user_id integer NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone
+CREATE TABLE categories_views (
+    id integer NOT NULL
 );
+
+
+--
+-- Name: categories_views_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE categories_views_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: categories_views_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE categories_views_id_seq OWNED BY categories_views.id;
 
 
 --
@@ -4327,6 +4394,13 @@ ALTER TABLE ONLY categories ALTER COLUMN id SET DEFAULT nextval('categories_id_s
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
+ALTER TABLE ONLY categories_views ALTER COLUMN id SET DEFAULT nextval('categories_views_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
 ALTER TABLE ONLY category_followers ALTER COLUMN id SET DEFAULT nextval('category_followers_id_seq'::regclass);
 
 
@@ -4677,6 +4751,14 @@ ALTER TABLE ONLY categories
 
 ALTER TABLE ONLY categories
     ADD CONSTRAINT categories_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: categories_views_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY categories_views
+    ADD CONSTRAINT categories_views_pkey PRIMARY KEY (id);
 
 
 --
@@ -5750,6 +5832,13 @@ CREATE INDEX projects_full_text_index_ix ON projects USING gin (full_text_index)
 
 
 --
+-- Name: projects_name_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX projects_name_idx ON projects USING gist (name gist_trgm_ops);
+
+
+--
 -- Name: unique_schema_migrations; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6617,6 +6706,18 @@ GRANT SELECT ON TABLE payments TO admin;
 
 
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: categories; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE categories FROM PUBLIC;
+REVOKE ALL ON TABLE categories FROM diogo;
+GRANT ALL ON TABLE categories TO diogo;
+GRANT SELECT ON TABLE categories TO admin;
+GRANT SELECT ON TABLE categories TO web_user;
+GRANT SELECT ON TABLE categories TO anonymous;
+
 
 --
 -- Name: category_totals; Type: ACL; Schema: 1; Owner: -

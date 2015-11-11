@@ -3,12 +3,6 @@
   - testset: "/rpc/project_search"
 
 - test:
-  - name: "Basic search (empty query)"
-  - url: "/rpc/project_search"
-  - method: "POST"
-  - body: '{"query": ""}'
-
-- test:
   - name: "Keyword search"
   - url: "/rpc/project_search"
   - method: "POST"
@@ -21,7 +15,7 @@
   - name: "Trigram search"
   - url: "/rpc/project_search"
   - method: "POST"
-  - body: '{"query": "flex"}'
+  - body: '{"query": "projto&flexivl"}'
   - validators:
     - compare: {jsonpath_mini: '0.permalink', comparator: 'str_eq', expected: 'flexivel'}
     - compare: {jsonpath_mini: "1.permalink", comparator: "str_eq", expected: None}
