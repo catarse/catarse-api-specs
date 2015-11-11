@@ -1,0 +1,21 @@
+---
+- config:
+  - testset: "/rpc/project_search"
+
+- test:
+  - name: "Keyword search"
+  - url: "/rpc/project_search"
+  - method: "POST"
+  - body: '{"query": "tudo"}'
+  - validators:
+    - compare: {jsonpath_mini: '0.permalink', comparator: 'str_eq', expected: 'tudo_ou_nada'}
+    - compare: {jsonpath_mini: "1.permalink", comparator: "str_eq", expected: None}
+
+- test:
+  - name: "Trigram search"
+  - url: "/rpc/project_search"
+  - method: "POST"
+  - body: '{"query": "projto&flexivl"}'
+  - validators:
+    - compare: {jsonpath_mini: '0.permalink', comparator: 'str_eq', expected: 'flexivel'}
+    - compare: {jsonpath_mini: "1.permalink", comparator: "str_eq", expected: None}
