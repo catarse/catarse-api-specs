@@ -27,6 +27,7 @@ echo "Initiating database users..."
 createuser --no-login web_user > /dev/null 2>&1
 createuser --no-login admin > /dev/null 2>&1
 createuser --no-login anonymous > /dev/null 2>&1
+createuser catarse -s > /dev/null 2>&1
 createuser postgrest -g admin -g web_user -g anonymous > /dev/null 2>&1
 
 echo "Initiating database schema..."
