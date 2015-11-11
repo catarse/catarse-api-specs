@@ -10,10 +10,10 @@
   - name: "Project mode should be all_or_nothing"
   - url: "/project_details?id=eq.1"
   - validators:
-    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'all_or_nothing'}
+    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'aon'}
 
 - test:
   - name: "Project mode should be flexible"
   - url: "/project_details?id=eq.2"
   - validators:
-    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'flexible'}
+    - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'flex'}
