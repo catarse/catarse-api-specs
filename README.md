@@ -27,7 +27,7 @@ If everything is installed and configured properly you should be able to run the
 using the command:
 
 ```
-python api_spec.py run_tests
+./api_spec.py run_tests
 ```
 
 You can also pass one parameter with a different database name to use for testing.
@@ -41,7 +41,7 @@ After modifying the development database you should run this script
 and run the tests to check if everything is still working.
 
 ```
-python api_spec.py recreate_schema --name=database_name
+./api_spec.py recreate_schema --name=database_name
 ```
 
 ## Adding tests
@@ -54,6 +54,6 @@ testing the endpoint **foo**, the test file will be **test/foo.yml**.
 To bootstrap a basic get test against the foo endpoint use the command:
 
 ```
-python api_spec.py generate_test --name=foo
+./api_spec.py generate_test --name=foo
 ```
 
