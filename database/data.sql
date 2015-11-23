@@ -41,6 +41,9 @@ INSERT INTO public.users (id, email, name) VALUES
     (1, 'relaizador@bar.com', 'Realizador de vários projetos'),
     (2, 'apoiador@bar.com', 'Apoiador');
 
+INSERT INTO public.category_followers (category_id, user_id) VALUES
+    (1, 1);
+
 INSERT INTO public.projects (id, name, state, user_id, category_id, permalink, headline, uploaded_image, about_html) VALUES
     (1, 'Rascunho de projeto tudo ou nada', 'draft',  1, 1, 'teste_tudo_ou_nada','headline', 'https::/amazon/some_image.jpg', 'sobre o projeto tudo ou nada'),
     (2, 'Rascunho de projeto flexível',     'draft',  1, 1, 'teste_flexivel',    'headline', 'https::/amazon/some_image.jpg', 'sobre o projeto flex'),
