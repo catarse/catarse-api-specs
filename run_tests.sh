@@ -47,7 +47,7 @@ if [[ $? -ne 0 ]]; then
 fi
 
 echo "Initiating PostgREST server..."
-./$dir/$postgrest_bin -d $db -U postgrest -a anonymous -p $port --jwt-secret iksjhdfsdk > logs/postgrest.log 2>&1 &
+./$dir/$postgrest_bin -d $db -U postgrest -a anonymous -p $port --jwt-secret gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr9C > logs/postgrest.log 2>&1 &
 
 echo "Running tests..."
 sleep 1
