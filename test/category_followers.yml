@@ -1,0 +1,8 @@
+---
+- config:
+  - testset: "categories"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/category_followers"
+  - expected_status: [404]

@@ -840,6 +840,37 @@ CREATE FUNCTION has_published_projects(users) RETURNS boolean
 
 
 --
+-- Name: insert_category_followers(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION insert_category_followers() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        declare
+          follow "1".category_followers;
+        begin
+          select
+            c.category_id,
+            c.user_id
+          from public.category_followers c
+          where
+            c.user_id = current_userr_id()
+            and c.category_id = NEW.category_id
+          into follow;
+
+          if found then
+            return follow;
+          end if;
+
+          insert into public.category_followers (user_id, category_id)
+          values (current_user_id(), NEW.category_id);
+
+          return new;
+        end;
+      $$;
+
+
+--
 -- Name: insert_project_reminder(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1510,6 +1541,17 @@ CREATE VIEW categories AS
   WHERE (EXISTS ( SELECT true AS bool
            FROM public.projects p
           WHERE ((p.category_id = c.id) AND ((p.state)::text <> ALL ((ARRAY['draft'::character varying, 'rejected'::character varying])::text[])))));
+
+
+--
+-- Name: category_followers; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW category_followers AS
+ SELECT c.category_id,
+    c.user_id
+   FROM public.category_followers c
+  WHERE public.is_owner_or_admin(c.user_id);
 
 
 --
@@ -6119,6 +6161,13 @@ CREATE TRIGGER delete_project_reminder INSTEAD OF DELETE ON project_reminders FO
 
 
 --
+-- Name: insert_category_followers; Type: TRIGGER; Schema: 1; Owner: -
+--
+
+CREATE TRIGGER insert_category_followers INSTEAD OF INSERT ON category_followers FOR EACH ROW EXECUTE PROCEDURE public.insert_category_followers();
+
+
+--
 -- Name: insert_project_reminder; Type: TRIGGER; Schema: 1; Owner: -
 --
 
@@ -6781,6 +6830,17 @@ GRANT ALL ON TABLE categories TO catarse;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
+
+
+--
+-- Name: category_followers; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE category_followers FROM PUBLIC;
+REVOKE ALL ON TABLE category_followers FROM catarse;
+GRANT ALL ON TABLE category_followers TO catarse;
+GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
+GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 
 
 --
