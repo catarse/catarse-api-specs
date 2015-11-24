@@ -1,0 +1,19 @@
+---
+- config:
+  - testset: "categories"
+
+- test:
+  - name: "Basic get"
+  - url: "/categories"
+
+- test:
+  - name: "Categories should show number of online projects"
+  - url: "/categories"
+  - validators:
+    - compare: {jsonpath_mini: '0.online_projects', comparator: 'eq', expected: 2}
+
+- test:
+  - name: "Categories should show number of followers"
+  - url: "/categories"
+  - validators:
+    - compare: {jsonpath_mini: '0.followers', comparator: 'eq', expected: 1}

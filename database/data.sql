@@ -41,15 +41,18 @@ INSERT INTO public.users (id, email, name) VALUES
     (1, 'relaizador@bar.com', 'Realizador de vários projetos'),
     (2, 'apoiador@bar.com', 'Apoiador');
 
+INSERT INTO public.category_followers (category_id, user_id) VALUES
+    (1, 1);
+
 INSERT INTO public.projects (id, name, state, user_id, category_id, permalink, headline, uploaded_image, about_html) VALUES
     (1, 'Rascunho de projeto tudo ou nada', 'draft',  1, 1, 'teste_tudo_ou_nada','headline', 'https::/amazon/some_image.jpg', 'sobre o projeto tudo ou nada'),
     (2, 'Rascunho de projeto flexível',     'draft',  1, 1, 'teste_flexivel',    'headline', 'https::/amazon/some_image.jpg', 'sobre o projeto flex'),
     (3, 'Projeto tudo ou nada no ar',       'online', 1, 1, 'tudo_ou_nada',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada'),
-    (4, 'Projeto flexível no ar',           'online', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex');
+    (4, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex');
 
-INSERT INTO public.flexible_projects (id, project_id) VALUES
-    (1, 2),
-    (2, 4);
+INSERT INTO public.flexible_projects (id, project_id, state) VALUES
+    (1, 2, 'draft'),
+    (2, 4, 'online');
 
 -- Refresh all materialized views
 REFRESH MATERIALIZED VIEW "1".user_totals;

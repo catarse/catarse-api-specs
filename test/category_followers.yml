@@ -1,0 +1,13 @@
+---
+- config:
+  - testset: "categories"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/category_followers"
+  - expected_status: [404]
+
+- test:
+  - url: "/category_followers"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - expected_status: [200]

@@ -256,7 +256,7 @@ CREATE FUNCTION remaining_time_json(projects) RETURNS json
 
 CREATE FUNCTION state_order(project projects) RETURNS project_state_order
     LANGUAGE sql STABLE
-    AS $$
+    AS $_$
 SELECT
     CASE project.mode
     WHEN 'flex' THEN
@@ -265,7 +265,7 @@ SELECT
         FROM
         flexible_project_states ps
         WHERE
-        ps.state = project.state
+        ps.state = fp.state
         )
     ELSE
         (
@@ -275,8 +275,11 @@ SELECT
         WHERE
         ps.state = project.state
         )
-    END;
-$$;
+    END
+FROM projects p 
+LEFT JOIN flexible_projects fp on fp.project_id = $1.id
+WHERE p.id = $1.id;
+$_$;
 
 
 --
@@ -490,7 +493,7 @@ WHERE
         OR
         pr.name % query
     )
-    AND pr.state NOT IN ('draft','rejected','deleted','in_analysis','approved')
+    AND pr.state_order >= 'published'
 ORDER BY
     p.listing_order,
     ts_rank(pr.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
@@ -651,7 +654,7 @@ CREATE FUNCTION confirmed_states() RETURNS text[]
 CREATE FUNCTION current_user_already_in_reminder(projects) RETURNS boolean
     LANGUAGE sql
     AS $_$
-        select public.user_has_reminder_for_project(nullif(current_setting('user_vars.user_id'), '')::integer, $1.id);
+        select public.user_has_reminder_for_project(current_user_id(), $1.id);
       $_$;
 
 
@@ -662,8 +665,19 @@ CREATE FUNCTION current_user_already_in_reminder(projects) RETURNS boolean
 CREATE FUNCTION current_user_has_contributed_to_project(integer) RETURNS boolean
     LANGUAGE sql STABLE
     AS $_$
-        select public.user_has_contributed_to_project(nullif(current_setting('user_vars.user_id'), '')::int, $1);
+        select public.user_has_contributed_to_project(current_user_id(), $1);
       $_$;
+
+
+--
+-- Name: current_user_id(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION current_user_id() RETURNS integer
+    LANGUAGE sql
+    AS $$
+        SELECT nullif(current_setting('user_vars.user_id'), '')::integer;
+      $$;
 
 
 --
@@ -674,10 +688,10 @@ CREATE FUNCTION delete_project_reminder() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
         begin
-          delete from public.project_notifications 
+          delete from public.project_notifications
           where
             template_name = 'reminder'
-            and user_id = current_setting('user_vars.user_id')::integer 
+            and user_id = current_user_id()
             and project_id = OLD.project_id;
           return old;
         end;
@@ -815,69 +829,6 @@ CREATE FUNCTION elapsed_time_json(projects) RETURNS json
 
 
 --
--- Name: categories; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE categories (
-    id integer NOT NULL,
-    name_pt text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    name_en character varying(255),
-    name_fr character varying(255),
-    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
-);
-
-
---
--- Name: category_followers; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE category_followers (
-    id integer NOT NULL,
-    category_id integer NOT NULL,
-    user_id integer NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone
-);
-
-
-SET search_path = "1", pg_catalog;
-
---
--- Name: categories; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW categories AS
- SELECT c.id,
-    c.name_pt,
-    c.name_en,
-    ( SELECT count(*) AS count
-           FROM public.projects p
-          WHERE (((p.state)::text = 'online'::text) AND (p.category_id = c.id))) AS online_projects,
-    ( SELECT count(DISTINCT cf.user_id) AS count
-           FROM public.category_followers cf
-          WHERE (cf.category_id = c.id)) AS followers
-   FROM public.categories c
-  WHERE (EXISTS ( SELECT true AS bool
-           FROM public.projects p
-          WHERE ((p.category_id = c.id) AND ((p.state)::text <> ALL ((ARRAY['draft'::character varying, 'rejected'::character varying])::text[])))));
-
-
-SET search_path = public, pg_catalog;
-
---
--- Name: following_category("1".categories); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION following_category("1".categories) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-        SELECT EXISTS(SELECT true from category_followers cf WHERE cf.category_id = $1.id AND cf.user_id = nullif(current_setting('user_vars.user_id'), '')::int)
-      $_$;
-
-
---
 -- Name: has_published_projects(users); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -886,6 +837,37 @@ CREATE FUNCTION has_published_projects(users) RETURNS boolean
     AS $_$
         select true from public.projects p where p.is_published and p.user_id = $1.id
       $_$;
+
+
+--
+-- Name: insert_category_followers(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION insert_category_followers() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        declare
+          follow "1".category_followers;
+        begin
+          select
+            c.category_id,
+            c.user_id
+          from public.category_followers c
+          where
+            c.user_id = current_userr_id()
+            and c.category_id = NEW.category_id
+          into follow;
+
+          if found then
+            return follow;
+          end if;
+
+          insert into public.category_followers (user_id, category_id)
+          values (current_user_id(), NEW.category_id);
+
+          return new;
+        end;
+      $$;
 
 
 --
@@ -904,7 +886,7 @@ CREATE FUNCTION insert_project_reminder() RETURNS trigger
           from public.project_notifications pn
           where
             pn.template_name = 'reminder'
-            and pn.user_id = current_setting('user_vars.user_id')::integer
+            and pn.user_id = current_user_id()
             and pn.project_id = NEW.project_id
           into reminder;
 
@@ -913,7 +895,7 @@ CREATE FUNCTION insert_project_reminder() RETURNS trigger
           end if;
 
           insert into public.project_notifications (user_id, project_id, template_name, deliver_at, locale, from_email, from_name)
-          values (current_setting('user_vars.user_id')::integer, NEW.project_id, 'reminder', (
+          values (current_user_id(), NEW.project_id, 'reminder', (
             select p.expires_at - '48 hours'::interval from projects p where p.id = NEW.project_id
           ), 'pt', settings('email_contact'), settings('company_name'));
 
@@ -972,7 +954,7 @@ CREATE FUNCTION is_confirmed(contributions) RETURNS boolean
 CREATE FUNCTION is_expired(projects) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            SELECT (current_timestamp > $1.expires_at);
+SELECT COALESCE(current_timestamp > $1.expires_at, false);
           $_$;
 
 
@@ -984,7 +966,7 @@ CREATE FUNCTION is_owner_or_admin(integer) RETURNS boolean
     LANGUAGE sql STABLE
     AS $_$
               SELECT
-                current_setting('user_vars.user_id') = $1::text
+                current_user_id() = $1
                 OR current_user = 'admin';
             $_$;
 
@@ -996,7 +978,7 @@ CREATE FUNCTION is_owner_or_admin(integer) RETURNS boolean
 CREATE FUNCTION is_published(projects) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-          select $1.state = ANY(public.published_states());
+          select $1.state_order >= 'published'::project_state_order;
         $_$;
 
 
@@ -1039,7 +1021,7 @@ CREATE FUNCTION near_me("1".projects) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
           SELECT
-      COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = nullif(current_setting('user_vars.user_id'), '')::int)
+      COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = current_user_id())
         $_$;
 
 
@@ -1080,7 +1062,10 @@ CREATE FUNCTION notify_about_confirmed_payments() RETURNS trigger
 CREATE FUNCTION open_for_contributions(projects) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            SELECT (not $1.is_expired AND $1.state = 'online')
+            SELECT (not $1.is_expired AND COALESCE(fp.state, $1.state) = 'online')
+FROM projects p
+LEFT JOIN flexible_projects fp on fp.project_id = $1.id
+WHERE p.id = $1.id;
           $_$;
 
 
@@ -1147,49 +1132,6 @@ CREATE FUNCTION percentage_funded(project_id integer, days_before_expires intege
 		c.project_id = $1
 		AND ((SELECT p.expires_at FROM projects p WHERE p.id = $1)::date - c.paid_at::date) >= $2;
 $_$;
-
-
---
--- Name: prevent_user_id_182878(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION prevent_user_id_182878() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.user_id = 182878 THEN
-    RAISE EXCEPTION 'Changing user_id of backer to % is not permitted', NEW.user_id;
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
-
---
--- Name: prevent_user_id_change(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION prevent_user_id_change() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-  IF NEW.user_id <> OLD.user_id THEN
-    RAISE EXCEPTION 'Changing user_id of backer to % is not permitted', NEW.user_id;
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
-
---
--- Name: published_states(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION published_states() RETURNS text[]
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $$
-            SELECT '{"online", "waiting_funds", "failed", "successful"}'::text[];
-          $$;
 
 
 --
@@ -1552,7 +1494,65 @@ CREATE AGGREGATE median(numeric) (
 );
 
 
+--
+-- Name: categories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE categories (
+    id integer NOT NULL,
+    name_pt text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    name_en character varying(255),
+    name_fr character varying(255),
+    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
+);
+
+
+--
+-- Name: category_followers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE category_followers (
+    id integer NOT NULL,
+    category_id integer NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone
+);
+
+
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: categories; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW categories AS
+ SELECT c.id,
+    c.name_pt AS name,
+    ( SELECT count(*) AS count
+           FROM public.projects p
+          WHERE (public.open_for_contributions(p.*) AND (p.category_id = c.id))) AS online_projects,
+    ( SELECT count(DISTINCT cf.user_id) AS count
+           FROM public.category_followers cf
+          WHERE (cf.category_id = c.id)) AS followers
+   FROM public.categories c
+  WHERE (EXISTS ( SELECT true AS bool
+           FROM public.projects p
+          WHERE (p.category_id = c.id)));
+
+
+--
+-- Name: category_followers; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW category_followers AS
+ SELECT c.category_id,
+    c.user_id
+   FROM public.category_followers c
+  WHERE public.is_owner_or_admin(c.user_id);
+
 
 --
 -- Name: category_totals; Type: TABLE; Schema: 1; Owner: -
@@ -1593,7 +1593,7 @@ CREATE VIEW contribution_details AS
     public.thumbnail_image(p.*) AS project_img,
     p.online_date AS project_online_date,
     p.expires_at AS project_expires_at,
-    p.state AS project_state,
+    (COALESCE(fp.state, (p.state)::text))::character varying(255) AS project_state,
     u.name AS user_name,
     public.thumbnail_image(u.*) AS user_profile_img,
     u.email,
@@ -1620,7 +1620,8 @@ CREATE VIEW contribution_details AS
     pa.chargeback_at,
     pa.full_text_index,
     public.waiting_payment(pa.*) AS waiting_payment
-   FROM (((public.projects p
+   FROM ((((public.projects p
+     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
      JOIN public.contributions c ON ((c.project_id = p.id)))
      JOIN public.payments pa ON ((c.id = pa.contribution_id)))
      JOIN public.users u ON ((c.user_id = u.id)));
@@ -1716,7 +1717,7 @@ CREATE VIEW contribution_reports_for_project_owners AS
      JOIN public.projects p ON ((b.project_id = p.id)))
      JOIN public.payments pa ON ((pa.contribution_id = b.id)))
      LEFT JOIN public.rewards r ON ((r.id = b.reward_id)))
-  WHERE (pa.state = ANY (ARRAY[('paid'::character varying)::text, ('pending'::character varying)::text]));
+  WHERE (pa.state = ANY (ARRAY['paid'::text, 'pending'::text, 'pending_refund'::text, 'refunded'::text]));
 
 
 --
@@ -2731,34 +2732,6 @@ ALTER SEQUENCE categories_id_seq OWNED BY categories.id;
 
 
 --
--- Name: categories_views; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE categories_views (
-    id integer NOT NULL
-);
-
-
---
--- Name: categories_views_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE categories_views_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: categories_views_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE categories_views_id_seq OWNED BY categories_views.id;
-
-
---
 -- Name: category_followers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3310,6 +3283,41 @@ CREATE TABLE flexible_project_states (
 
 
 --
+-- Name: flexible_project_transitions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE flexible_project_transitions (
+    id integer NOT NULL,
+    to_state character varying(255) NOT NULL,
+    metadata text DEFAULT '{}'::text,
+    sort_key integer NOT NULL,
+    flexible_project_id integer NOT NULL,
+    most_recent boolean NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    updated_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: flexible_project_transitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE flexible_project_transitions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: flexible_project_transitions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE flexible_project_transitions_id_seq OWNED BY flexible_project_transitions.id;
+
+
+--
 -- Name: flexible_projects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3783,6 +3791,44 @@ ALTER SEQUENCE rewards_id_seq OWNED BY rewards.id;
 CREATE TABLE schema_migrations (
     version character varying(255) NOT NULL
 );
+
+
+--
+-- Name: sendgrid_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE sendgrid_events (
+    id integer NOT NULL,
+    notification_id integer NOT NULL,
+    notification_user integer NOT NULL,
+    notification_type text NOT NULL,
+    template_name text NOT NULL,
+    event text NOT NULL,
+    email text NOT NULL,
+    useragent text,
+    sendgrid_data json NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: sendgrid_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE sendgrid_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: sendgrid_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE sendgrid_events_id_seq OWNED BY sendgrid_events.id;
 
 
 --
@@ -4307,6 +4353,17 @@ CREATE MATERIALIZED VIEW projects_and_contributors_per_day AS
 
 
 --
+-- Name: slips_to_update_fee; Type: TABLE; Schema: temp; Owner: -
+--
+
+CREATE TABLE slips_to_update_fee (
+    date timestamp without time zone,
+    gateway_id integer,
+    fee numeric
+);
+
+
+--
 -- Name: sorbonne; Type: TABLE; Schema: temp; Owner: -
 --
 
@@ -4412,13 +4469,6 @@ ALTER TABLE ONLY banks ALTER COLUMN id SET DEFAULT nextval('banks_id_seq'::regcl
 --
 
 ALTER TABLE ONLY categories ALTER COLUMN id SET DEFAULT nextval('categories_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY categories_views ALTER COLUMN id SET DEFAULT nextval('categories_views_id_seq'::regclass);
 
 
 --
@@ -4544,6 +4594,13 @@ ALTER TABLE ONLY donations ALTER COLUMN id SET DEFAULT nextval('donations_id_seq
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
+ALTER TABLE ONLY flexible_project_transitions ALTER COLUMN id SET DEFAULT nextval('flexible_project_transitions_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
 ALTER TABLE ONLY flexible_projects ALTER COLUMN id SET DEFAULT nextval('flexible_projects_id_seq'::regclass);
 
 
@@ -4650,6 +4707,13 @@ ALTER TABLE ONLY redactor_assets ALTER COLUMN id SET DEFAULT nextval('redactor_a
 --
 
 ALTER TABLE ONLY rewards ALTER COLUMN id SET DEFAULT nextval('rewards_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY sendgrid_events ALTER COLUMN id SET DEFAULT nextval('sendgrid_events_id_seq'::regclass);
 
 
 --
@@ -4775,14 +4839,6 @@ ALTER TABLE ONLY categories
 
 ALTER TABLE ONLY categories
     ADD CONSTRAINT categories_pkey PRIMARY KEY (id);
-
-
---
--- Name: categories_views_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY categories_views
-    ADD CONSTRAINT categories_views_pkey PRIMARY KEY (id);
 
 
 --
@@ -4930,6 +4986,14 @@ ALTER TABLE ONLY flexible_project_states
 
 
 --
+-- Name: flexible_project_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY flexible_project_transitions
+    ADD CONSTRAINT flexible_project_transitions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: flexible_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5063,6 +5127,14 @@ ALTER TABLE ONLY redactor_assets
 
 ALTER TABLE ONLY rewards
     ADD CONSTRAINT rewards_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sendgrid_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY sendgrid_events
+    ADD CONSTRAINT sendgrid_events_pkey PRIMARY KEY (id);
 
 
 --
@@ -5359,6 +5431,13 @@ CREATE INDEX fk__donation_notifications_user_id ON donation_notifications USING 
 
 
 --
+-- Name: fk__flexible_project_transitions_flexible_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__flexible_project_transitions_flexible_project_id ON flexible_project_transitions USING btree (flexible_project_id);
+
+
+--
 -- Name: fk__flexible_projects_project_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5496,6 +5575,13 @@ CREATE INDEX fk__users_channel_id ON users USING btree (channel_id);
 --
 
 CREATE INDEX fk__users_country_id ON users USING btree (country_id);
+
+
+--
+-- Name: flexible_project_transitions_flexible_project_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX flexible_project_transitions_flexible_project_id_idx ON flexible_project_transitions USING btree (flexible_project_id) WHERE most_recent;
 
 
 --
@@ -5667,6 +5753,13 @@ CREATE INDEX index_donations_on_user_id ON donations USING btree (user_id);
 
 
 --
+-- Name: index_flexible_project_transitions_parent_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_flexible_project_transitions_parent_sort ON flexible_project_transitions USING btree (flexible_project_id, sort_key);
+
+
+--
 -- Name: index_flexible_projects_on_project_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -5699,13 +5792,6 @@ CREATE INDEX index_project_accounts_on_bank_id ON project_accounts USING btree (
 --
 
 CREATE INDEX index_project_accounts_on_project_id ON project_accounts USING btree (project_id);
-
-
---
--- Name: index_project_transitions_parent_most_recent; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_project_transitions_parent_most_recent ON project_transitions USING btree (project_id, most_recent);
 
 
 --
@@ -5846,6 +5932,13 @@ CREATE UNIQUE INDEX payments_gateway_id_gateway_idx ON payments USING btree (gat
 --
 
 CREATE UNIQUE INDEX payments_id_idx ON payments USING btree (id DESC);
+
+
+--
+-- Name: project_transitions_project_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX project_transitions_project_id_idx ON project_transitions USING btree (project_id) WHERE most_recent;
 
 
 --
@@ -6065,6 +6158,13 @@ CREATE RULE "_RETURN" AS
 --
 
 CREATE TRIGGER delete_project_reminder INSTEAD OF DELETE ON project_reminders FOR EACH ROW EXECUTE PROCEDURE public.delete_project_reminder();
+
+
+--
+-- Name: insert_category_followers; Type: TRIGGER; Schema: 1; Owner: -
+--
+
+CREATE TRIGGER insert_category_followers INSTEAD OF INSERT ON category_followers FOR EACH ROW EXECUTE PROCEDURE public.insert_category_followers();
 
 
 --
@@ -6365,6 +6465,14 @@ ALTER TABLE ONLY donations
 
 
 --
+-- Name: fk_flexible_project_transitions_flexible_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY flexible_project_transitions
+    ADD CONSTRAINT fk_flexible_project_transitions_flexible_project_id FOREIGN KEY (flexible_project_id) REFERENCES flexible_projects(id);
+
+
+--
 -- Name: fk_flexible_projects_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6625,8 +6733,7 @@ ALTER TABLE ONLY project_posts
 --
 
 REVOKE ALL ON SCHEMA "1" FROM PUBLIC;
-
-
+REVOKE ALL ON SCHEMA "1" FROM catarse;
 GRANT ALL ON SCHEMA "1" TO catarse;
 GRANT USAGE ON SCHEMA "1" TO admin;
 GRANT USAGE ON SCHEMA "1" TO web_user;
@@ -6638,8 +6745,6 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-
-
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
@@ -6649,8 +6754,7 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE projects FROM catarse;
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
@@ -6662,8 +6766,8 @@ GRANT SELECT ON TABLE projects TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE flexible_projects FROM catarse;
+GRANT ALL ON TABLE flexible_projects TO catarse;
 GRANT SELECT ON TABLE flexible_projects TO admin;
 GRANT SELECT ON TABLE flexible_projects TO web_user;
 GRANT SELECT ON TABLE flexible_projects TO anonymous;
@@ -6674,8 +6778,7 @@ GRANT SELECT ON TABLE flexible_projects TO anonymous;
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE users FROM catarse;
 GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
 
@@ -6685,7 +6788,7 @@ GRANT SELECT ON TABLE users TO admin;
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-
+REVOKE ALL(deactivated_at) ON TABLE users FROM catarse;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
@@ -6696,8 +6799,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE projects FROM catarse;
+GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO anonymous;
@@ -6710,8 +6813,7 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE payments FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE payments FROM catarse;
 GRANT ALL ON TABLE payments TO catarse;
 GRANT SELECT ON TABLE payments TO admin;
 
@@ -6723,11 +6825,22 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE categories FROM catarse;
+GRANT ALL ON TABLE categories TO catarse;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
+
+
+--
+-- Name: category_followers; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE category_followers FROM PUBLIC;
+REVOKE ALL ON TABLE category_followers FROM catarse;
+GRANT ALL ON TABLE category_followers TO catarse;
+GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
+GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 
 
 --
@@ -6735,10 +6848,9 @@ GRANT SELECT ON TABLE categories TO anonymous;
 --
 
 REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-
-
-GRANT SELECT ON TABLE category_totals TO admin;
+REVOKE ALL ON TABLE category_totals FROM catarse;
 GRANT ALL ON TABLE category_totals TO catarse;
+GRANT SELECT ON TABLE category_totals TO admin;
 
 
 --
@@ -6746,8 +6858,7 @@ GRANT ALL ON TABLE category_totals TO catarse;
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE contribution_details FROM catarse;
 GRANT ALL ON TABLE contribution_details TO catarse;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 
@@ -6757,8 +6868,7 @@ GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 --
 
 REVOKE ALL ON TABLE contribution_reports FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE contribution_reports FROM catarse;
 GRANT ALL ON TABLE contribution_reports TO catarse;
 GRANT SELECT ON TABLE contribution_reports TO admin;
 GRANT SELECT ON TABLE contribution_reports TO web_user;
@@ -6771,8 +6881,7 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE settings FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE settings FROM catarse;
 GRANT ALL ON TABLE settings TO catarse;
 GRANT SELECT ON TABLE settings TO admin;
 
@@ -6784,8 +6893,7 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM catarse;
 GRANT ALL ON TABLE contribution_reports_for_project_owners TO catarse;
 GRANT SELECT ON TABLE contribution_reports_for_project_owners TO admin;
 
@@ -6795,8 +6903,7 @@ GRANT SELECT ON TABLE contribution_reports_for_project_owners TO admin;
 --
 
 REVOKE ALL ON TABLE contributions FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE contributions FROM catarse;
 GRANT ALL ON TABLE contributions TO catarse;
 GRANT ALL ON TABLE contributions TO admin;
 
@@ -6806,8 +6913,7 @@ GRANT ALL ON TABLE contributions TO admin;
 --
 
 REVOKE ALL ON TABLE financial_reports FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE financial_reports FROM catarse;
 GRANT ALL ON TABLE financial_reports TO catarse;
 GRANT SELECT ON TABLE financial_reports TO admin;
 GRANT SELECT ON TABLE financial_reports TO web_user;
@@ -6818,8 +6924,7 @@ GRANT SELECT ON TABLE financial_reports TO web_user;
 --
 
 REVOKE ALL ON TABLE user_totals FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE user_totals FROM catarse;
 GRANT ALL ON TABLE user_totals TO catarse;
 GRANT SELECT ON TABLE user_totals TO anonymous;
 GRANT SELECT ON TABLE user_totals TO admin;
@@ -6831,8 +6936,7 @@ GRANT SELECT ON TABLE user_totals TO web_user;
 --
 
 REVOKE ALL ON TABLE project_contributions FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_contributions FROM catarse;
 GRANT ALL ON TABLE project_contributions TO catarse;
 GRANT SELECT ON TABLE project_contributions TO anonymous;
 GRANT SELECT ON TABLE project_contributions TO web_user;
@@ -6844,8 +6948,7 @@ GRANT SELECT ON TABLE project_contributions TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_day FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_contributions_per_day FROM catarse;
 GRANT ALL ON TABLE project_contributions_per_day TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_day TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_day TO web_user;
@@ -6857,12 +6960,11 @@ GRANT SELECT ON TABLE project_contributions_per_day TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_contributions_per_location FROM catarse;
+GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
-GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 
 
 --
@@ -6870,8 +6972,8 @@ GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_contributions_per_ref FROM catarse;
+GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
@@ -6882,8 +6984,8 @@ GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_details FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_details FROM catarse;
+GRANT ALL ON TABLE project_details TO catarse;
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
@@ -6894,11 +6996,10 @@ GRANT SELECT ON TABLE project_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_financials FROM catarse;
+GRANT ALL ON TABLE project_financials TO catarse;
 GRANT SELECT ON TABLE project_financials TO web_user;
 GRANT SELECT ON TABLE project_financials TO admin;
-GRANT ALL ON TABLE project_financials TO catarse;
 
 
 --
@@ -6906,8 +7007,7 @@ GRANT ALL ON TABLE project_financials TO catarse;
 --
 
 REVOKE ALL ON TABLE project_posts_details FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_posts_details FROM catarse;
 GRANT ALL ON TABLE project_posts_details TO catarse;
 GRANT SELECT ON TABLE project_posts_details TO admin;
 GRANT SELECT ON TABLE project_posts_details TO web_user;
@@ -6921,8 +7021,7 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_notifications FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_notifications FROM catarse;
 GRANT ALL ON TABLE project_notifications TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO admin;
@@ -6935,8 +7034,7 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_reminders FROM catarse;
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
@@ -6947,8 +7045,7 @@ GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 --
 
 REVOKE ALL ON TABLE projects_for_home FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE projects_for_home FROM catarse;
 GRANT ALL ON TABLE projects_for_home TO catarse;
 GRANT SELECT ON TABLE projects_for_home TO admin;
 GRANT SELECT ON TABLE projects_for_home TO web_user;
@@ -6959,8 +7056,7 @@ GRANT SELECT ON TABLE projects_for_home TO web_user;
 --
 
 REVOKE ALL ON TABLE recommendations FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE recommendations FROM catarse;
 GRANT ALL ON TABLE recommendations TO catarse;
 GRANT SELECT ON TABLE recommendations TO admin;
 GRANT SELECT ON TABLE recommendations TO web_user;
@@ -6971,8 +7067,7 @@ GRANT SELECT ON TABLE recommendations TO web_user;
 --
 
 REVOKE ALL ON TABLE referral_totals FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE referral_totals FROM catarse;
 GRANT ALL ON TABLE referral_totals TO catarse;
 GRANT SELECT ON TABLE referral_totals TO admin;
 
@@ -6982,8 +7077,7 @@ GRANT SELECT ON TABLE referral_totals TO admin;
 --
 
 REVOKE ALL ON TABLE reward_details FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE reward_details FROM catarse;
 GRANT ALL ON TABLE reward_details TO catarse;
 GRANT SELECT ON TABLE reward_details TO admin;
 GRANT SELECT ON TABLE reward_details TO web_user;
@@ -6995,8 +7089,7 @@ GRANT SELECT ON TABLE reward_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE statistics FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE statistics FROM catarse;
 GRANT ALL ON TABLE statistics TO catarse;
 GRANT SELECT ON TABLE statistics TO admin;
 GRANT SELECT ON TABLE statistics TO web_user;
@@ -7008,8 +7101,7 @@ GRANT SELECT ON TABLE statistics TO anonymous;
 --
 
 REVOKE ALL ON TABLE team_members FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE team_members FROM catarse;
 GRANT ALL ON TABLE team_members TO catarse;
 GRANT SELECT ON TABLE team_members TO web_user;
 GRANT SELECT ON TABLE team_members TO admin;
@@ -7021,8 +7113,7 @@ GRANT SELECT ON TABLE team_members TO anonymous;
 --
 
 REVOKE ALL ON TABLE team_totals FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE team_totals FROM catarse;
 GRANT ALL ON TABLE team_totals TO catarse;
 GRANT SELECT ON TABLE team_totals TO admin;
 GRANT SELECT ON TABLE team_totals TO web_user;
@@ -7034,8 +7125,7 @@ GRANT SELECT ON TABLE team_totals TO anonymous;
 --
 
 REVOKE ALL ON TABLE user_credits FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE user_credits FROM catarse;
 GRANT ALL ON TABLE user_credits TO catarse;
 GRANT SELECT ON TABLE user_credits TO admin;
 GRANT SELECT ON TABLE user_credits TO web_user;
@@ -7046,8 +7136,8 @@ GRANT SELECT ON TABLE user_credits TO web_user;
 --
 
 REVOKE ALL ON TABLE user_details FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE user_details FROM catarse;
+GRANT ALL ON TABLE user_details TO catarse;
 GRANT SELECT ON TABLE user_details TO PUBLIC;
 
 
@@ -7056,8 +7146,8 @@ GRANT SELECT ON TABLE user_details TO PUBLIC;
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE users FROM catarse;
+GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
 
 
@@ -7066,7 +7156,7 @@ GRANT SELECT ON TABLE users TO admin;
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-
+REVOKE ALL(deactivated_at) ON TABLE users FROM catarse;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
@@ -7075,8 +7165,7 @@ GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 --
 
 REVOKE ALL ON TABLE year_totals FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE year_totals FROM catarse;
 GRANT ALL ON TABLE year_totals TO catarse;
 GRANT SELECT ON TABLE year_totals TO admin;
 GRANT SELECT ON TABLE year_totals TO web_user;
@@ -7089,8 +7178,8 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE flexible_project_states FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE flexible_project_states FROM catarse;
+GRANT ALL ON TABLE flexible_project_states TO catarse;
 GRANT SELECT ON TABLE flexible_project_states TO admin;
 GRANT SELECT ON TABLE flexible_project_states TO web_user;
 GRANT SELECT ON TABLE flexible_project_states TO anonymous;
@@ -7101,8 +7190,7 @@ GRANT SELECT ON TABLE flexible_project_states TO anonymous;
 --
 
 REVOKE ALL ON TABLE payment_logs FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE payment_logs FROM catarse;
 GRANT ALL ON TABLE payment_logs TO catarse;
 GRANT SELECT ON TABLE payment_logs TO admin;
 GRANT SELECT ON TABLE payment_logs TO web_user;
@@ -7113,8 +7201,7 @@ GRANT SELECT ON TABLE payment_logs TO web_user;
 --
 
 REVOKE ALL ON TABLE payment_transfers FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE payment_transfers FROM catarse;
 GRANT ALL ON TABLE payment_transfers TO catarse;
 GRANT SELECT ON TABLE payment_transfers TO admin;
 GRANT SELECT ON TABLE payment_transfers TO web_user;
@@ -7125,8 +7212,7 @@ GRANT SELECT ON TABLE payment_transfers TO web_user;
 --
 
 REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM PUBLIC;
-
-
+REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM catarse;
 GRANT ALL ON SEQUENCE project_notifications_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO admin;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
@@ -7137,8 +7223,8 @@ GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
 --
 
 REVOKE ALL ON TABLE project_states FROM PUBLIC;
-
-
+REVOKE ALL ON TABLE project_states FROM catarse;
+GRANT ALL ON TABLE project_states TO catarse;
 GRANT SELECT ON TABLE project_states TO admin;
 GRANT SELECT ON TABLE project_states TO web_user;
 GRANT SELECT ON TABLE project_states TO anonymous;
