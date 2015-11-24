@@ -201,7 +201,7 @@ CREATE TABLE projects (
     video_thumbnail text,
     state character varying(255) DEFAULT 'draft'::character varying NOT NULL,
     online_days integer,
-    online_date timestamp with time zone,
+    online_date timestamp without time zone,
     more_links text,
     first_contributions text,
     uploaded_image character varying(255),
@@ -1459,13 +1459,13 @@ CREATE FUNCTION was_confirmed(contributions) RETURNS boolean
 
 
 --
--- Name: zone_expires_at(projects); Type: FUNCTION; Schema: public; Owner: -
+-- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
+CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-        SELECT $1.expires_at::timestamptz AT TIME ZONE settings('timezone');
+        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
       $_$;
 
 
@@ -1886,7 +1886,8 @@ CREATE TABLE project_details (
     state_order public.project_state_order,
     expires_at timestamp without time zone,
     zone_expires_at timestamp without time zone,
-    online_date timestamp with time zone,
+    online_date timestamp without time zone,
+    zone_online_date timestamp without time zone,
     sent_to_analysis_at timestamp without time zone,
     is_published boolean,
     is_expired boolean,
@@ -2015,189 +2016,6 @@ CREATE VIEW project_reminders AS
     pn.user_id
    FROM public.project_notifications pn
   WHERE ((pn.template_name = 'reminder'::text) AND public.is_owner_or_admin(pn.user_id));
-
-
---
--- Name: projects_for_home; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW projects_for_home AS
- WITH recommended_projects AS (
-         SELECT 'recommended'::text AS origin,
-            recommends.id,
-            recommends.name,
-            recommends.expires_at,
-            recommends.user_id,
-            recommends.category_id,
-            recommends.goal,
-            recommends.headline,
-            recommends.video_url,
-            recommends.short_url,
-            recommends.created_at,
-            recommends.updated_at,
-            recommends.about_html,
-            recommends.recommended,
-            recommends.home_page_comment,
-            recommends.permalink,
-            recommends.video_thumbnail,
-            recommends.state,
-            recommends.online_days,
-            recommends.online_date,
-            recommends.traffic_sources,
-            recommends.more_links,
-            recommends.first_contributions AS first_backers,
-            recommends.uploaded_image,
-            recommends.video_embed_url
-           FROM public.projects recommends
-          WHERE (recommends.recommended AND ((recommends.state)::text = 'online'::text))
-          ORDER BY (random())
-         LIMIT 3
-        ), recents_projects AS (
-         SELECT 'recents'::text AS origin,
-            recents.id,
-            recents.name,
-            recents.expires_at,
-            recents.user_id,
-            recents.category_id,
-            recents.goal,
-            recents.headline,
-            recents.video_url,
-            recents.short_url,
-            recents.created_at,
-            recents.updated_at,
-            recents.about_html,
-            recents.recommended,
-            recents.home_page_comment,
-            recents.permalink,
-            recents.video_thumbnail,
-            recents.state,
-            recents.online_days,
-            recents.online_date,
-            recents.traffic_sources,
-            recents.more_links,
-            recents.first_contributions AS first_backers,
-            recents.uploaded_image,
-            recents.video_embed_url
-           FROM public.projects recents
-          WHERE (((recents.state)::text = 'online'::text) AND ((now() - recents.online_date) <= '5 days'::interval) AND (NOT (recents.id IN ( SELECT recommends.id
-                   FROM recommended_projects recommends))))
-          ORDER BY (random())
-         LIMIT 3
-        ), expiring_projects AS (
-         SELECT 'expiring'::text AS origin,
-            expiring.id,
-            expiring.name,
-            expiring.expires_at,
-            expiring.user_id,
-            expiring.category_id,
-            expiring.goal,
-            expiring.headline,
-            expiring.video_url,
-            expiring.short_url,
-            expiring.created_at,
-            expiring.updated_at,
-            expiring.about_html,
-            expiring.recommended,
-            expiring.home_page_comment,
-            expiring.permalink,
-            expiring.video_thumbnail,
-            expiring.state,
-            expiring.online_days,
-            expiring.online_date,
-            expiring.traffic_sources,
-            expiring.more_links,
-            expiring.first_contributions AS first_backers,
-            expiring.uploaded_image,
-            expiring.video_embed_url
-           FROM public.projects expiring
-          WHERE (((expiring.state)::text = 'online'::text) AND (expiring.expires_at <= (now() + '14 days'::interval)) AND (NOT (expiring.id IN ( SELECT recommends.id
-                   FROM recommended_projects recommends
-                UNION
-                 SELECT recents.id
-                   FROM recents_projects recents))))
-          ORDER BY (random())
-         LIMIT 3
-        )
- SELECT recommended_projects.origin,
-    recommended_projects.id,
-    recommended_projects.name,
-    recommended_projects.expires_at,
-    recommended_projects.user_id,
-    recommended_projects.category_id,
-    recommended_projects.goal,
-    recommended_projects.headline,
-    recommended_projects.video_url,
-    recommended_projects.short_url,
-    recommended_projects.created_at,
-    recommended_projects.updated_at,
-    recommended_projects.about_html,
-    recommended_projects.recommended,
-    recommended_projects.home_page_comment,
-    recommended_projects.permalink,
-    recommended_projects.video_thumbnail,
-    recommended_projects.state,
-    recommended_projects.online_days,
-    recommended_projects.online_date,
-    recommended_projects.traffic_sources,
-    recommended_projects.more_links,
-    recommended_projects.first_backers,
-    recommended_projects.uploaded_image,
-    recommended_projects.video_embed_url
-   FROM recommended_projects
-UNION
- SELECT recents_projects.origin,
-    recents_projects.id,
-    recents_projects.name,
-    recents_projects.expires_at,
-    recents_projects.user_id,
-    recents_projects.category_id,
-    recents_projects.goal,
-    recents_projects.headline,
-    recents_projects.video_url,
-    recents_projects.short_url,
-    recents_projects.created_at,
-    recents_projects.updated_at,
-    recents_projects.about_html,
-    recents_projects.recommended,
-    recents_projects.home_page_comment,
-    recents_projects.permalink,
-    recents_projects.video_thumbnail,
-    recents_projects.state,
-    recents_projects.online_days,
-    recents_projects.online_date,
-    recents_projects.traffic_sources,
-    recents_projects.more_links,
-    recents_projects.first_backers,
-    recents_projects.uploaded_image,
-    recents_projects.video_embed_url
-   FROM recents_projects
-UNION
- SELECT expiring_projects.origin,
-    expiring_projects.id,
-    expiring_projects.name,
-    expiring_projects.expires_at,
-    expiring_projects.user_id,
-    expiring_projects.category_id,
-    expiring_projects.goal,
-    expiring_projects.headline,
-    expiring_projects.video_url,
-    expiring_projects.short_url,
-    expiring_projects.created_at,
-    expiring_projects.updated_at,
-    expiring_projects.about_html,
-    expiring_projects.recommended,
-    expiring_projects.home_page_comment,
-    expiring_projects.permalink,
-    expiring_projects.video_thumbnail,
-    expiring_projects.state,
-    expiring_projects.online_days,
-    expiring_projects.online_date,
-    expiring_projects.traffic_sources,
-    expiring_projects.more_links,
-    expiring_projects.first_backers,
-    expiring_projects.uploaded_image,
-    expiring_projects.video_embed_url
-   FROM expiring_projects;
 
 
 --
@@ -4330,29 +4148,6 @@ CREATE TABLE project_ranges (
 
 
 --
--- Name: projects_and_contributors_per_day; Type: MATERIALIZED VIEW; Schema: temp; Owner: -
---
-
-CREATE MATERIALIZED VIEW projects_and_contributors_per_day AS
- WITH days AS (
-         SELECT (generate_series.generate_series)::date AS day
-           FROM generate_series('2014-05-01 00:00:00+00'::timestamp with time zone, '2015-05-01 00:00:00+00'::timestamp with time zone, '1 day'::interval) generate_series(generate_series)
-          WHERE (date_part('dow'::text, generate_series.generate_series) <> ALL (ARRAY[(6)::double precision, (0)::double precision]))
-        )
- SELECT d.day,
-    count(DISTINCT c.user_id) AS distinct_contributors,
-    ( SELECT count(*) AS count
-           FROM public.projects p_1
-          WHERE (((p_1.state)::text = ANY (ARRAY[('online'::character varying)::text, ('waiting_funds'::character varying)::text, ('successful'::character varying)::text, ('failed'::character varying)::text])) AND (d.day >= p_1.online_date) AND (d.day <= p_1.expires_at))) AS online_projects
-   FROM ((days d
-     LEFT JOIN public.payments p ON (((p.created_at)::date = d.day)))
-     LEFT JOIN public.contributions c ON ((c.id = p.contribution_id)))
-  WHERE (p.state = ANY (public.confirmed_states()))
-  GROUP BY d.day
-  WITH NO DATA;
-
-
---
 -- Name: slips_to_update_fee; Type: TABLE; Schema: temp; Owner: -
 --
 
@@ -6121,8 +5916,9 @@ CREATE RULE "_RETURN" AS
     public.mode(p.*) AS mode,
     public.state_order(p.*) AS state_order,
     p.expires_at,
-    public.zone_expires_at(p.*) AS zone_expires_at,
+    public.zone_timestamp(p.expires_at) AS zone_expires_at,
     p.online_date,
+    public.zone_timestamp(p.online_date) AS zone_online_date,
     p.sent_to_analysis_at,
     public.is_published(p.*) AS is_published,
     public.is_expired(p.*) AS is_expired,
@@ -7038,17 +6834,6 @@ REVOKE ALL ON TABLE project_reminders FROM catarse;
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
-
-
---
--- Name: projects_for_home; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE projects_for_home FROM PUBLIC;
-REVOKE ALL ON TABLE projects_for_home FROM catarse;
-GRANT ALL ON TABLE projects_for_home TO catarse;
-GRANT SELECT ON TABLE projects_for_home TO admin;
-GRANT SELECT ON TABLE projects_for_home TO web_user;
 
 
 --
