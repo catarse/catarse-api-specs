@@ -493,7 +493,7 @@ WHERE
         OR
         pr.name % query
     )
-    AND pr.state NOT IN ('draft','rejected','deleted','in_analysis','approved')
+    AND pr.state_order >= 'published'
 ORDER BY
     p.listing_order,
     ts_rank(pr.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
@@ -1533,14 +1533,14 @@ CREATE VIEW categories AS
     c.name_pt AS name,
     ( SELECT count(*) AS count
            FROM public.projects p
-          WHERE (((p.state)::text = 'online'::text) AND (p.category_id = c.id))) AS online_projects,
+          WHERE (public.open_for_contributions(p.*) AND (p.category_id = c.id))) AS online_projects,
     ( SELECT count(DISTINCT cf.user_id) AS count
            FROM public.category_followers cf
           WHERE (cf.category_id = c.id)) AS followers
    FROM public.categories c
   WHERE (EXISTS ( SELECT true AS bool
            FROM public.projects p
-          WHERE ((p.category_id = c.id) AND ((p.state)::text <> ALL ((ARRAY['draft'::character varying, 'rejected'::character varying])::text[])))));
+          WHERE (p.category_id = c.id)));
 
 
 --
