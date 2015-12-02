@@ -257,28 +257,7 @@ CREATE FUNCTION remaining_time_json(projects) RETURNS json
 CREATE FUNCTION state_order(project projects) RETURNS project_state_order
     LANGUAGE sql STABLE
     AS $_$
-SELECT
-    CASE project.mode
-    WHEN 'flex' THEN
-        (
-        SELECT state_order
-        FROM
-        flexible_project_states ps
-        WHERE
-        ps.state = fp.state
-        )
-    ELSE
-        (
-        SELECT state_order
-        FROM
-        project_states ps
-        WHERE
-        ps.state = project.state
-        )
-    END
-FROM projects p 
-LEFT JOIN flexible_projects fp on fp.project_id = $1.id
-WHERE p.id = $1.id;
+SELECT public.state_order($1.id);
 $_$;
 
 
@@ -446,7 +425,9 @@ SET search_path = "1", pg_catalog;
 --
 
 CREATE VIEW projects AS
- SELECT p.id AS project_id,
+ SELECT p.id,
+    p.category_id,
+    p.id AS project_id,
     p.name AS project_name,
     p.headline,
     p.permalink,
@@ -466,7 +447,8 @@ CREATE VIEW projects AS
           WHERE (pt.project_id = p.id)), (0)::numeric) AS progress,
     COALESCE(s.acronym, (pa.address_state)::character varying(255)) AS state_acronym,
     u.name AS owner_name,
-    COALESCE(c.name, pa.address_city) AS city_name
+    COALESCE(c.name, pa.address_city) AS city_name,
+    p.full_text_index
    FROM (((((public.projects p
      JOIN public.users u ON ((p.user_id = u.id)))
      LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
@@ -486,18 +468,18 @@ SELECT
     p.*
 FROM
     "1".projects p
-    JOIN public.projects pr ON pr.id = p.project_id
 WHERE
     (
-        pr.full_text_index @@ to_tsquery('portuguese', unaccent(query))
+        p.full_text_index @@ to_tsquery('portuguese', unaccent(query))
         OR
-        pr.name % query
+        p.project_name % query
     )
-    AND pr.state_order >= 'published'
+    AND p.state_order >= 'published'
 ORDER BY
-    p.listing_order,
-    ts_rank(pr.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
-    pr.id DESC;
+    public.is_current_and_online(p.expires_at, p.state) DESC,
+    p.state_order,
+    ts_rank(p.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
+    p.project_id DESC;
 $$;
 
 
@@ -948,14 +930,36 @@ CREATE FUNCTION is_confirmed(contributions) RETURNS boolean
 
 
 --
+-- Name: is_current_and_online(timestamp without time zone, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION is_current_and_online(expires_at timestamp without time zone, state text) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT (not public.is_past(expires_at) AND state = 'online');
+$$;
+
+
+--
+-- Name: is_expired("1".projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION is_expired(project "1".projects) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $_$
+    SELECT public.is_past($1.expires_at);
+$_$;
+
+
+--
 -- Name: is_expired(projects); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION is_expired(projects) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
+CREATE FUNCTION is_expired(project projects) RETURNS boolean
+    LANGUAGE sql STABLE
     AS $_$
-SELECT COALESCE(current_timestamp > $1.expires_at, false);
-          $_$;
+    SELECT public.is_past($1.expires_at);
+$_$;
 
 
 --
@@ -969,6 +973,17 @@ CREATE FUNCTION is_owner_or_admin(integer) RETURNS boolean
                 current_user_id() = $1
                 OR current_user = 'admin';
             $_$;
+
+
+--
+-- Name: is_past(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION is_past(expires_at timestamp without time zone) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT COALESCE(current_timestamp > expires_at, false);
+$$;
 
 
 --
@@ -997,32 +1012,24 @@ CREATE FUNCTION is_second_slip(payments) RETURNS boolean
 
 
 --
--- Name: listing_order("1".projects); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION listing_order(project "1".projects) RETURNS integer
-    LANGUAGE sql STABLE
-    AS $$
-    SELECT
-        CASE project.state
-            WHEN 'online' THEN 1
-            WHEN 'waiting_funds' THEN 2
-            WHEN 'successful' THEN 3
-            WHEN 'failed' THEN 4
-        END;
-$$;
-
-
---
 -- Name: near_me("1".projects); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION near_me("1".projects) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
+    LANGUAGE sql STABLE
     AS $_$
-          SELECT
-      COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = current_user_id())
-        $_$;
+    SELECT
+      COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = current_user_id());
+$_$;
+
+
+--
+-- Name: not_expired_and_online(timestamp without time zone, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION not_expired_and_online(expires_at timestamp without time zone, state text) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$ SELECT (not coalesce(current_timestamp > expires_at, false) AND state = 'online'); $$;
 
 
 --
@@ -1060,13 +1067,10 @@ CREATE FUNCTION notify_about_confirmed_payments() RETURNS trigger
 --
 
 CREATE FUNCTION open_for_contributions(projects) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
+    LANGUAGE sql STABLE
     AS $_$
-            SELECT (not $1.is_expired AND COALESCE(fp.state, $1.state) = 'online')
-FROM projects p
-LEFT JOIN flexible_projects fp on fp.project_id = $1.id
-WHERE p.id = $1.id;
-          $_$;
+    SELECT public.is_current_and_online($1.expires_at, COALESCE((SELECT fp.state FROM flexible_projects fp WHERE fp.project_id = $1.id), $1.state));
+$_$;
 
 
 --
@@ -1180,6 +1184,39 @@ CREATE FUNCTION settings(name text) RETURNS text
 
 
 --
+-- Name: slip_expiration_weekdays(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION slip_expiration_weekdays() RETURNS integer
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT 2;
+    $$;
+
+
+--
+-- Name: slip_expired(payments); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION slip_expired(payments) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $_$
+    SELECT $1.slip_expires_at < current_timestamp;
+    $_$;
+
+
+--
+-- Name: slip_expires_at(payments); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION slip_expires_at(payments) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $_$
+SELECT weekdays_from(public.slip_expiration_weekdays(), $1.created_at);
+    $_$;
+
+
+--
 -- Name: sold_out(rewards); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1188,6 +1225,38 @@ CREATE FUNCTION sold_out(reward rewards) RETURNS boolean
     AS $$
     SELECT reward.paid_count + reward.waiting_payment_count >= reward.maximum_contributions;
     $$;
+
+
+--
+-- Name: state_order(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION state_order(project_id integer) RETURNS project_state_order
+    LANGUAGE sql STABLE
+    AS $_$
+SELECT
+    CASE p.mode
+    WHEN 'flex' THEN
+        (
+        SELECT state_order
+        FROM
+        flexible_project_states ps
+        WHERE
+        ps.state = fp.state
+        )
+    ELSE
+        (
+        SELECT state_order
+        FROM
+        project_states ps
+        WHERE
+        ps.state = p.state
+        )
+    END
+FROM projects p
+LEFT JOIN flexible_projects fp on fp.project_id = p.id
+WHERE p.id = $1;
+$_$;
 
 
 --
@@ -1459,6 +1528,34 @@ CREATE FUNCTION was_confirmed(contributions) RETURNS boolean
 
 
 --
+-- Name: weekdays_from(integer, timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION weekdays_from(weekdays integer, from_ts timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT max(day) FROM (
+      SELECT day
+      FROM generate_series(from_ts, from_ts + '1 year'::interval, '1 day') day
+      WHERE extract(dow from day) not in (0,1)
+      ORDER BY day
+      LIMIT (weekdays + 1)
+    ) a;
+    $$;
+
+
+--
+-- Name: zone_expires_at(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+        SELECT public.zone_timestamp($1.expires_at);
+      $_$;
+
+
+--
 -- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1494,20 +1591,24 @@ CREATE AGGREGATE median(numeric) (
 );
 
 
+SET search_path = "1", pg_catalog;
+
 --
--- Name: categories; Type: TABLE; Schema: public; Owner: -
+-- Name: categories; Type: TABLE; Schema: 1; Owner: -
 --
 
 CREATE TABLE categories (
-    id integer NOT NULL,
-    name_pt text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    name_en character varying(255),
-    name_fr character varying(255),
-    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
+    id integer,
+    name text,
+    online_projects bigint,
+    followers bigint,
+    following boolean
 );
 
+ALTER TABLE ONLY categories REPLICA IDENTITY NOTHING;
+
+
+SET search_path = public, pg_catalog;
 
 --
 -- Name: category_followers; Type: TABLE; Schema: public; Owner: -
@@ -1523,25 +1624,6 @@ CREATE TABLE category_followers (
 
 
 SET search_path = "1", pg_catalog;
-
---
--- Name: categories; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW categories AS
- SELECT c.id,
-    c.name_pt AS name,
-    ( SELECT count(*) AS count
-           FROM public.projects p
-          WHERE (public.open_for_contributions(p.*) AND (p.category_id = c.id))) AS online_projects,
-    ( SELECT count(DISTINCT cf.user_id) AS count
-           FROM public.category_followers cf
-          WHERE (cf.category_id = c.id)) AS followers
-   FROM public.categories c
-  WHERE (EXISTS ( SELECT true AS bool
-           FROM public.projects p
-          WHERE (p.category_id = c.id)));
-
 
 --
 -- Name: category_followers; Type: VIEW; Schema: 1; Owner: -
@@ -1751,6 +1833,202 @@ CREATE VIEW financial_reports AS
      JOIN public.users u ON ((u.id = p.user_id)));
 
 
+SET search_path = public, pg_catalog;
+
+--
+-- Name: category_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE category_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    category_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: contribution_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE contribution_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    contribution_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: donation_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE donation_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    donation_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: project_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE project_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    project_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: project_post_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE project_post_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    project_post_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: user_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE user_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now()
+);
+
+
+--
+-- Name: user_transfer_notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE user_transfer_notifications (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    user_transfer_id integer NOT NULL,
+    from_email text NOT NULL,
+    from_name text NOT NULL,
+    template_name text NOT NULL,
+    locale text NOT NULL,
+    sent_at timestamp without time zone,
+    deliver_at timestamp without time zone DEFAULT now(),
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: notifications; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW notifications AS
+ SELECT n.user_id,
+    n.template_name,
+    n.created_at,
+    n.sent_at,
+    n.deliver_at
+   FROM ( SELECT category_notifications.user_id,
+            category_notifications.template_name,
+            category_notifications.created_at,
+            category_notifications.sent_at,
+            category_notifications.deliver_at
+           FROM public.category_notifications
+        UNION ALL
+         SELECT donation_notifications.user_id,
+            donation_notifications.template_name,
+            donation_notifications.created_at,
+            donation_notifications.sent_at,
+            donation_notifications.deliver_at
+           FROM public.donation_notifications
+        UNION ALL
+         SELECT user_notifications.user_id,
+            user_notifications.template_name,
+            user_notifications.created_at,
+            user_notifications.sent_at,
+            user_notifications.deliver_at
+           FROM public.user_notifications
+        UNION ALL
+         SELECT project_notifications.user_id,
+            project_notifications.template_name,
+            project_notifications.created_at,
+            project_notifications.sent_at,
+            project_notifications.deliver_at
+           FROM public.project_notifications
+        UNION ALL
+         SELECT user_transfer_notifications.user_id,
+            user_transfer_notifications.template_name,
+            user_transfer_notifications.created_at,
+            user_transfer_notifications.sent_at,
+            user_transfer_notifications.deliver_at
+           FROM public.user_transfer_notifications
+        UNION ALL
+         SELECT project_post_notifications.user_id,
+            project_post_notifications.template_name,
+            project_post_notifications.created_at,
+            project_post_notifications.sent_at,
+            project_post_notifications.deliver_at
+           FROM public.project_post_notifications
+        UNION ALL
+         SELECT contribution_notifications.user_id,
+            contribution_notifications.template_name,
+            contribution_notifications.created_at,
+            contribution_notifications.sent_at,
+            contribution_notifications.deliver_at
+           FROM public.contribution_notifications) n;
+
+
 --
 -- Name: user_totals; Type: MATERIALIZED VIEW; Schema: 1; Owner: -
 --
@@ -1795,7 +2073,7 @@ CREATE VIEW project_contributions AS
     public.waiting_payment(pa.*) AS waiting_payment,
     public.is_owner_or_admin(p.user_id) AS is_owner_or_admin,
     ut.total_contributed_projects,
-    c.created_at
+    public.zone_timestamp(c.created_at) AS created_at
    FROM ((((public.contributions c
      JOIN public.users u ON ((c.user_id = u.id)))
      JOIN public.projects p ON ((p.id = c.project_id)))
@@ -1983,29 +2261,6 @@ CREATE VIEW project_posts_details AS
    FROM (public.project_posts pp
      JOIN public.projects p ON ((p.id = pp.project_id)));
 
-
-SET search_path = public, pg_catalog;
-
---
--- Name: project_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE project_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    project_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
-
-
-SET search_path = "1", pg_catalog;
 
 --
 -- Name: project_reminders; Type: VIEW; Schema: 1; Owner: -
@@ -2531,6 +2786,21 @@ ALTER SEQUENCE banks_id_seq OWNED BY banks.id;
 
 
 --
+-- Name: categories; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE categories (
+    id integer NOT NULL,
+    name_pt text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    name_en character varying(255),
+    name_fr character varying(255),
+    CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
+);
+
+
+--
 -- Name: categories_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -2566,25 +2836,6 @@ CREATE SEQUENCE category_followers_id_seq
 --
 
 ALTER SEQUENCE category_followers_id_seq OWNED BY category_followers.id;
-
-
---
--- Name: category_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE category_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    category_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
 
 
 --
@@ -2857,25 +3108,6 @@ ALTER SEQUENCE configurations_id_seq OWNED BY settings.id;
 
 
 --
--- Name: contribution_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE contribution_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    contribution_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
-
-
---
 -- Name: contribution_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3031,25 +3263,6 @@ CREATE SEQUENCE deps_saved_ddl_deps_id_seq
 --
 
 ALTER SEQUENCE deps_saved_ddl_deps_id_seq OWNED BY deps_saved_ddl.deps_id;
-
-
---
--- Name: donation_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE donation_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    donation_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
 
 
 --
@@ -3412,25 +3625,6 @@ ALTER SEQUENCE project_notifications_id_seq OWNED BY project_notifications.id;
 
 
 --
--- Name: project_post_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE project_post_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    project_post_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
-
-
---
 -- Name: project_post_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3752,24 +3946,6 @@ ALTER SEQUENCE user_links_id_seq OWNED BY user_links.id;
 
 
 --
--- Name: user_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE user_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now()
-);
-
-
---
 -- Name: user_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3786,25 +3962,6 @@ CREATE SEQUENCE user_notifications_id_seq
 --
 
 ALTER SEQUENCE user_notifications_id_seq OWNED BY user_notifications.id;
-
-
---
--- Name: user_transfer_notifications; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE user_transfer_notifications (
-    id integer NOT NULL,
-    user_id integer NOT NULL,
-    user_transfer_id integer NOT NULL,
-    from_email text NOT NULL,
-    from_name text NOT NULL,
-    template_name text NOT NULL,
-    locale text NOT NULL,
-    sent_at timestamp without time zone,
-    deliver_at timestamp without time zone DEFAULT now(),
-    created_at timestamp without time zone,
-    updated_at timestamp without time zone
-);
 
 
 --
@@ -5794,6 +5951,26 @@ SET search_path = "1", pg_catalog;
 --
 
 CREATE RULE "_RETURN" AS
+    ON SELECT TO categories DO INSTEAD  SELECT c.id,
+    c.name_pt AS name,
+    count(DISTINCT p.id) FILTER (WHERE public.is_current_and_online(p.expires_at, COALESCE(fp.state, (p.state)::text))) AS online_projects,
+    ( SELECT count(DISTINCT cf.user_id) AS count
+           FROM public.category_followers cf
+          WHERE (cf.category_id = c.id)) AS followers,
+    (EXISTS ( SELECT true AS bool
+           FROM public.category_followers cf
+          WHERE ((cf.category_id = c.id) AND (cf.user_id = public.current_user_id())))) AS following
+   FROM ((public.categories c
+     LEFT JOIN public.projects p ON ((p.category_id = c.id)))
+     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+  GROUP BY c.id;
+
+
+--
+-- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
+--
+
+CREATE RULE "_RETURN" AS
     ON SELECT TO project_totals DO INSTEAD  SELECT c.project_id,
     sum(p.value) AS pledged,
     ((sum(p.value) / projects.goal) * (100)::numeric) AS progress,
@@ -6554,7 +6731,7 @@ REVOKE ALL ON TABLE projects FROM catarse;
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
-GRANT SELECT ON TABLE projects TO PUBLIC;
+GRANT SELECT ON TABLE projects TO anonymous;
 
 
 --
@@ -6567,6 +6744,7 @@ GRANT ALL ON TABLE flexible_projects TO catarse;
 GRANT SELECT ON TABLE flexible_projects TO admin;
 GRANT SELECT ON TABLE flexible_projects TO web_user;
 GRANT SELECT ON TABLE flexible_projects TO anonymous;
+GRANT SELECT ON TABLE flexible_projects TO PUBLIC;
 
 
 --
@@ -6597,9 +6775,9 @@ SET search_path = "1", pg_catalog;
 REVOKE ALL ON TABLE projects FROM PUBLIC;
 REVOKE ALL ON TABLE projects FROM catarse;
 GRANT ALL ON TABLE projects TO catarse;
-GRANT SELECT ON TABLE projects TO admin;
-GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO anonymous;
+GRANT SELECT ON TABLE projects TO web_user;
+GRANT SELECT ON TABLE projects TO admin;
 
 
 SET search_path = public, pg_catalog;
@@ -6715,6 +6893,31 @@ GRANT SELECT ON TABLE financial_reports TO admin;
 GRANT SELECT ON TABLE financial_reports TO web_user;
 
 
+SET search_path = public, pg_catalog;
+
+--
+-- Name: project_notifications; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE project_notifications FROM PUBLIC;
+REVOKE ALL ON TABLE project_notifications FROM catarse;
+GRANT ALL ON TABLE project_notifications TO catarse;
+GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO web_user;
+GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO admin;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: notifications; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE notifications FROM PUBLIC;
+REVOKE ALL ON TABLE notifications FROM catarse;
+GRANT ALL ON TABLE notifications TO catarse;
+GRANT SELECT ON TABLE notifications TO admin;
+
+
 --
 -- Name: user_totals; Type: ACL; Schema: 1; Owner: -
 --
@@ -6809,21 +7012,6 @@ GRANT SELECT ON TABLE project_posts_details TO admin;
 GRANT SELECT ON TABLE project_posts_details TO web_user;
 GRANT SELECT ON TABLE project_posts_details TO anonymous;
 
-
-SET search_path = public, pg_catalog;
-
---
--- Name: project_notifications; Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON TABLE project_notifications FROM PUBLIC;
-REVOKE ALL ON TABLE project_notifications FROM catarse;
-GRANT ALL ON TABLE project_notifications TO catarse;
-GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO web_user;
-GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO admin;
-
-
-SET search_path = "1", pg_catalog;
 
 --
 -- Name: project_reminders; Type: ACL; Schema: 1; Owner: -
