@@ -175,6 +175,17 @@ CREATE TYPE project_state_order AS ENUM (
 );
 
 
+--
+-- Name: is_current_and_online(timestamp without time zone, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION is_current_and_online(expires_at timestamp without time zone, state text) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT (not public.is_past(expires_at) AND state = 'online');
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_with_oids = false;
@@ -425,9 +436,8 @@ SET search_path = "1", pg_catalog;
 --
 
 CREATE VIEW projects AS
- SELECT p.id,
+ SELECT p.id AS project_id,
     p.category_id,
-    p.id AS project_id,
     p.name AS project_name,
     p.headline,
     p.permalink,
@@ -448,7 +458,8 @@ CREATE VIEW projects AS
     COALESCE(s.acronym, (pa.address_state)::character varying(255)) AS state_acronym,
     u.name AS owner_name,
     COALESCE(c.name, pa.address_city) AS city_name,
-    p.full_text_index
+    p.full_text_index,
+    public.is_current_and_online(p.expires_at, COALESCE(fp.state, (p.state)::text)) AS open_for_contributions
    FROM (((((public.projects p
      JOIN public.users u ON ((p.user_id = u.id)))
      LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
@@ -476,7 +487,7 @@ WHERE
     )
     AND p.state_order >= 'published'
 ORDER BY
-    public.is_current_and_online(p.expires_at, p.state) DESC,
+    p.open_for_contributions DESC,
     p.state_order,
     ts_rank(p.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
     p.project_id DESC;
@@ -927,17 +938,6 @@ CREATE FUNCTION is_confirmed(contributions) RETURNS boolean
         WHERE p.contribution_id = $1.id AND p.state = 'paid'
       );
     $_$;
-
-
---
--- Name: is_current_and_online(timestamp without time zone, text); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION is_current_and_online(expires_at timestamp without time zone, state text) RETURNS boolean
-    LANGUAGE sql STABLE
-    AS $$
-    SELECT (not public.is_past(expires_at) AND state = 'online');
-$$;
 
 
 --
@@ -5951,26 +5951,6 @@ SET search_path = "1", pg_catalog;
 --
 
 CREATE RULE "_RETURN" AS
-    ON SELECT TO categories DO INSTEAD  SELECT c.id,
-    c.name_pt AS name,
-    count(DISTINCT p.id) FILTER (WHERE public.is_current_and_online(p.expires_at, COALESCE(fp.state, (p.state)::text))) AS online_projects,
-    ( SELECT count(DISTINCT cf.user_id) AS count
-           FROM public.category_followers cf
-          WHERE (cf.category_id = c.id)) AS followers,
-    (EXISTS ( SELECT true AS bool
-           FROM public.category_followers cf
-          WHERE ((cf.category_id = c.id) AND (cf.user_id = public.current_user_id())))) AS following
-   FROM ((public.categories c
-     LEFT JOIN public.projects p ON ((p.category_id = c.id)))
-     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
-  GROUP BY c.id;
-
-
---
--- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
---
-
-CREATE RULE "_RETURN" AS
     ON SELECT TO project_totals DO INSTEAD  SELECT c.project_id,
     sum(p.value) AS pledged,
     ((sum(p.value) / projects.goal) * (100)::numeric) AS progress,
@@ -6124,6 +6104,26 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.states st ON ((st.id = ct.state_id)))
      LEFT JOIN public.project_notifications pn ON ((pn.project_id = p.id)))
   GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
+
+
+--
+-- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
+--
+
+CREATE RULE "_RETURN" AS
+    ON SELECT TO categories DO INSTEAD  SELECT c.id,
+    c.name_pt AS name,
+    count(DISTINCT p.id) FILTER (WHERE public.is_current_and_online(p.expires_at, COALESCE(fp.state, (p.state)::text))) AS online_projects,
+    ( SELECT count(DISTINCT cf.user_id) AS count
+           FROM public.category_followers cf
+          WHERE (cf.category_id = c.id)) AS followers,
+    (EXISTS ( SELECT true AS bool
+           FROM public.category_followers cf
+          WHERE ((cf.category_id = c.id) AND (cf.user_id = public.current_user_id())))) AS following
+   FROM ((public.categories c
+     LEFT JOIN public.projects p ON ((p.category_id = c.id)))
+     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+  GROUP BY c.id;
 
 
 --

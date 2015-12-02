@@ -21,3 +21,7 @@
 - test:
   - name: "Filter by category_id"
   - url: "/projects?category_id=eq.1"
+
+- test:
+  - name: "Order by open_for_contributions and state_order"
+  - url: "/projects?category_id=eq.1&order=open_for_contributions.desc,state_order.asc,project_id.desc"
