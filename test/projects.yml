@@ -17,3 +17,7 @@
   - url: "/projects?project_id=eq.2"
   - validators:
     - compare: {jsonpath_mini: '0.mode', comparator: 'str_eq', expected: 'flex'}
+
+- test:
+  - name: "Filter by category_id"
+  - url: "/projects?category_id=eq.1"
