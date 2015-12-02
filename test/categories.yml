@@ -17,3 +17,16 @@
   - url: "/categories"
   - validators:
     - compare: {jsonpath_mini: '0.followers', comparator: 'eq', expected: 1}
+
+- test:
+  - name: "Following should be false if I'm not logged in"
+  - url: "/categories"
+  - validators:
+    - compare: {jsonpath_mini: '0.following', comparator: 'eq', expected: False}
+
+- test:
+  - name: "Following should be true if I follow the category"
+  - url: "/categories"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - validators:
+    - compare: {jsonpath_mini: '0.following', comparator: 'eq', expected: True}
