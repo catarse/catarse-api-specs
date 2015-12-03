@@ -1,6 +1,6 @@
 ---
 - config:
-  - testset: "categories"
+  - testset: "category_followers"
 
 - test:
   - name: "Basic get is not available for anonymous"
@@ -11,3 +11,27 @@
   - url: "/category_followers"
   - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
   - expected_status: [200]
+
+- test:
+  - name: "Follow category that I already follow"
+  - url: "/category_followers"
+  - method: 'POST'
+  - body: '{"category_id": 1}'
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - expected_status: [201]
+
+- test:
+  - name: "Unfollow category"
+  - url: "/category_followers"
+  - method: 'DELETE'
+  - body: '{"category_id": 1}'
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - expected_status: [204]
+
+- test:
+  - name: "Follow category that I do not follow"
+  - url: "/category_followers"
+  - method: 'POST'
+  - body: '{"category_id": 1}'
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - expected_status: [201]
