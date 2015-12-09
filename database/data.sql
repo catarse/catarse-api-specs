@@ -65,3 +65,12 @@ REFRESH MATERIALIZED VIEW "1".statistics;
  * -- users.yml
  * INSERT INTO users ...
  */
+
+-- contribution_details.yml
+INSERT INTO contributions (id, project_id, user_id, value, payer_email) VALUES
+    (1, 4, 1, 10, 'foo@bar.com');
+
+INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, value) VALUES
+    (1, 1, 'paid', 'key 1', 'Payment Gateway', 'Credit Card', 10);
+
+
