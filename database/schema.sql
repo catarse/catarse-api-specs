@@ -7272,8 +7272,8 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM leroy;
-GRANT ALL ON SCHEMA public TO leroy;
+REVOKE ALL ON SCHEMA public FROM catarse;
+GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
@@ -7329,8 +7329,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM leroy;
-GRANT ALL ON TABLE projects TO leroy;
+REVOKE ALL ON TABLE projects FROM catarse;
+GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO anonymous;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
@@ -7353,8 +7353,8 @@ GRANT SELECT ON TABLE payments TO admin;
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
-REVOKE ALL ON TABLE project_reminders FROM leroy;
-GRANT ALL ON TABLE project_reminders TO leroy;
+REVOKE ALL ON TABLE project_reminders FROM catarse;
+GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 
@@ -7366,8 +7366,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
-REVOKE ALL ON TABLE categories FROM leroy;
-GRANT ALL ON TABLE categories TO leroy;
+REVOKE ALL ON TABLE categories FROM catarse;
+GRANT ALL ON TABLE categories TO catarse;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
@@ -7393,8 +7393,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE category_followers FROM PUBLIC;
-REVOKE ALL ON TABLE category_followers FROM leroy;
-GRANT ALL ON TABLE category_followers TO leroy;
+REVOKE ALL ON TABLE category_followers FROM catarse;
+GRANT ALL ON TABLE category_followers TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 
@@ -7404,8 +7404,8 @@ GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 --
 
 REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-REVOKE ALL ON TABLE category_totals FROM leroy;
-GRANT ALL ON TABLE category_totals TO leroy;
+REVOKE ALL ON TABLE category_totals FROM catarse;
+GRANT ALL ON TABLE category_totals TO catarse;
 GRANT SELECT ON TABLE category_totals TO admin;
 GRANT ALL ON TABLE category_totals TO catarse;
 
@@ -7415,8 +7415,8 @@ GRANT ALL ON TABLE category_totals TO catarse;
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
-REVOKE ALL ON TABLE contribution_details FROM leroy;
-GRANT ALL ON TABLE contribution_details TO leroy;
+REVOKE ALL ON TABLE contribution_details FROM catarse;
+GRANT ALL ON TABLE contribution_details TO catarse;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 
 
@@ -7496,8 +7496,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE notifications FROM PUBLIC;
-REVOKE ALL ON TABLE notifications FROM leroy;
-GRANT ALL ON TABLE notifications TO leroy;
+REVOKE ALL ON TABLE notifications FROM catarse;
+GRANT ALL ON TABLE notifications TO catarse;
 GRANT SELECT ON TABLE notifications TO admin;
 
 
@@ -7542,8 +7542,8 @@ GRANT SELECT ON TABLE project_contributions_per_day TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_location FROM leroy;
-GRANT ALL ON TABLE project_contributions_per_location TO leroy;
+REVOKE ALL ON TABLE project_contributions_per_location FROM catarse;
+GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
@@ -7555,8 +7555,8 @@ GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_ref FROM leroy;
-GRANT ALL ON TABLE project_contributions_per_ref TO leroy;
+REVOKE ALL ON TABLE project_contributions_per_ref FROM catarse;
+GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
@@ -7568,8 +7568,8 @@ GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 --
 
 REVOKE ALL ON TABLE project_details FROM PUBLIC;
-REVOKE ALL ON TABLE project_details FROM leroy;
-GRANT ALL ON TABLE project_details TO leroy;
+REVOKE ALL ON TABLE project_details FROM catarse;
+GRANT ALL ON TABLE project_details TO catarse;
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
@@ -7580,8 +7580,8 @@ GRANT SELECT ON TABLE project_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
-REVOKE ALL ON TABLE project_financials FROM leroy;
-GRANT ALL ON TABLE project_financials TO leroy;
+REVOKE ALL ON TABLE project_financials FROM catarse;
+GRANT ALL ON TABLE project_financials TO catarse;
 GRANT SELECT ON TABLE project_financials TO web_user;
 GRANT SELECT ON TABLE project_financials TO admin;
 GRANT ALL ON TABLE project_financials TO catarse;
@@ -7615,8 +7615,8 @@ GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 --
 
 REVOKE ALL ON TABLE project_transfers FROM PUBLIC;
-REVOKE ALL ON TABLE project_transfers FROM leroy;
-GRANT ALL ON TABLE project_transfers TO leroy;
+REVOKE ALL ON TABLE project_transfers FROM catarse;
+GRANT ALL ON TABLE project_transfers TO catarse;
 GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
 
 
@@ -7625,8 +7625,8 @@ GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
 --
 
 REVOKE ALL ON TABLE project_transitions FROM PUBLIC;
-REVOKE ALL ON TABLE project_transitions FROM leroy;
-GRANT ALL ON TABLE project_transitions TO leroy;
+REVOKE ALL ON TABLE project_transitions FROM catarse;
+GRANT ALL ON TABLE project_transitions TO catarse;
 GRANT SELECT ON TABLE project_transitions TO admin;
 
 
@@ -7813,8 +7813,8 @@ GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
 --
 
 REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM PUBLIC;
-REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM leroy;
-GRANT ALL ON SEQUENCE project_reminders_id_seq TO leroy;
+REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM catarse;
+GRANT ALL ON SEQUENCE project_reminders_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO web_user;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO admin;
 
