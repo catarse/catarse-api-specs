@@ -48,11 +48,19 @@ INSERT INTO public.projects (id, name, state, user_id, category_id, permalink, h
     (1, 'Rascunho de projeto tudo ou nada', 'draft',  1, 1, 'teste_tudo_ou_nada','headline', 'https::/amazon/some_image.jpg', 'sobre o projeto tudo ou nada'),
     (2, 'Rascunho de projeto flexível',     'draft',  1, 1, 'teste_flexivel',    'headline', 'https::/amazon/some_image.jpg', 'sobre o projeto flex'),
     (3, 'Projeto tudo ou nada no ar',       'online', 1, 1, 'tudo_ou_nada',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada'),
-    (4, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex');
+    (4, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex'),
+    (5, 'Projeto tudo ou nada bem sucedido','successful', 1, 1, 'tudo_ou_nada_successful',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido');
+
+INSERT INTO public.project_transitions (id, project_id, to_state, sort_key, most_recent, created_at, updated_at) VALUES
+       (1, 3, 'online', 0, true, now(), now()),
+       (2, 5, 'successful', 0, true, now(), now());
 
 INSERT INTO public.flexible_projects (id, project_id, state) VALUES
     (1, 2, 'draft'),
     (2, 4, 'online');
+
+INSERT INTO public.flexible_project_transitions (id, flexible_project_id, to_state, sort_key, most_recent, created_at, updated_at) VALUES
+       (1, 2, 'online', 0, true, now(), now());
 
 -- Refresh all materialized views
 REFRESH MATERIALIZED VIEW "1".user_totals;
@@ -73,4 +81,11 @@ INSERT INTO contributions (id, project_id, user_id, value, payer_email) VALUES
 INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, value) VALUES
     (1, 1, 'paid', 'key 1', 'Payment Gateway', 'Credit Card', 10);
 
+-- balances.yml
+INSERT INTO balance_transactions (id, project_id, event_name, user_id, amount) VALUES
+       (1, 5, 'successful_project_pledged', 1, 100),
+       (2, 5, 'catarse_project_service_fee', 1, -13);
+       
+INSERT INTO balance_transactions (id, event_name, user_id, amount) VALUES
+       (3, 'for_fun_credits', 2, 10);
 
