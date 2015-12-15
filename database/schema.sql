@@ -822,6 +822,45 @@ CREATE FUNCTION in_analysis_at(project projects) RETURNS timestamp without time 
 
 
 --
+-- Name: insert_balance_transfer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION insert_balance_transfer() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            v_balance "1".balances;
+            v_balance_transfer_id integer;
+            v_balance_transfer "1".balance_transfers;
+        BEGIN
+            IF NOT public.is_owner_or_admin(NEW.user_id) THEN
+                RAISE EXCEPTION 'insufficient privileges to insert balance_transactions';
+            END IF;
+
+            SELECT * FROM "1".balances 
+                WHERE user_id = NEW.user_id
+                INTO v_balance;
+
+            IF COALESCE(v_balance.amount, 0) <= 0 THEN
+                RAISE EXCEPTION 'insufficient funds';
+            END IF;
+
+            INSERT INTO public.balance_transfers (user_id, amount, created_at)
+                VALUES (NEW.user_id, v_balance.amount, now())
+                RETURNING id INTO v_balance_transfer_id;
+
+            INSERT INTO public.balance_transactions (user_id, event_name, balance_transfer_id, created_at, amount)
+                VALUES (NEW.user_id, 'balance_transfer_request', v_balance_transfer_id, now(), (v_balance.amount * -1));
+
+            SELECT * FROM "1".balance_transfers WHERE id = v_balance_transfer_id
+                INTO v_balance_transfer;
+
+            RETURN v_balance_transfer;
+        END;
+    $$;
+
+
+--
 -- Name: insert_category_followers(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1648,7 +1687,154 @@ CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
       $_$;
 
 
+--
+-- Name: balance_transactions; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE balance_transactions (
+    id integer NOT NULL,
+    project_id integer,
+    contribution_id integer,
+    event_name text NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone,
+    amount numeric NOT NULL,
+    balance_transfer_id integer
+);
+
+
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transactions; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balance_transactions AS
+ SELECT bt.user_id,
+    sum(
+        CASE
+            WHEN (bt.amount > (0)::numeric) THEN bt.amount
+            ELSE (0)::numeric
+        END) AS credit,
+    sum(
+        CASE
+            WHEN (bt.amount < (0)::numeric) THEN bt.amount
+            ELSE (0)::numeric
+        END) AS debit,
+    sum(bt.amount) AS total_amount,
+    (public.zone_timestamp(bt.created_at))::date AS created_at,
+    json_agg(json_build_object('amount', bt.amount, 'event_name', bt.event_name, 'origin_object', json_build_object('id', COALESCE(bt.project_id, bt.contribution_id), 'references_to',
+        CASE
+            WHEN (bt.project_id IS NOT NULL) THEN 'project'::text
+            WHEN (bt.contribution_id IS NOT NULL) THEN 'contribution'::text
+            ELSE NULL::text
+        END, 'name',
+        CASE
+            WHEN (bt.project_id IS NOT NULL) THEN ( SELECT projects.name
+               FROM public.projects
+              WHERE (projects.id = bt.project_id))
+            ELSE NULL::text
+        END))) AS source
+   FROM public.balance_transactions bt
+  WHERE public.is_owner_or_admin(bt.user_id)
+  GROUP BY bt.created_at, bt.user_id
+  ORDER BY (public.zone_timestamp(bt.created_at))::date DESC;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transfers; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE balance_transfers (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    amount numeric NOT NULL,
+    transfer_id text,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transfers; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balance_transfers AS
+ SELECT bt.id,
+    bt.user_id,
+    bt.amount,
+    bt.transfer_id,
+    public.zone_timestamp(bt.created_at) AS created_at,
+    'pending'::text AS state
+   FROM public.balance_transfers bt
+  WHERE public.is_owner_or_admin(bt.user_id);
+
+
+--
+-- Name: balances; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balances AS
+ SELECT bt.user_id,
+    sum(bt.amount) AS amount
+   FROM public.balance_transactions bt
+  WHERE public.is_owner_or_admin(bt.user_id)
+  GROUP BY bt.user_id;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: banks; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE banks (
+    id integer NOT NULL,
+    name text NOT NULL,
+    code text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: bank_accounts; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW bank_accounts AS
+ WITH p_accs AS (
+         SELECT p_1.user_id,
+            max(pa_1.id) AS last_id
+           FROM (public.project_accounts pa_1
+             JOIN public.projects p_1 ON ((pa_1.project_id = p_1.id)))
+          WHERE (public.successful_at(p_1.*) IS NOT NULL)
+          GROUP BY p_1.user_id
+        )
+ SELECT pac.user_id,
+    b.name AS bank_name,
+    b.code AS bank_code,
+    pa.account,
+    pa.account_digit,
+    pa.account_type,
+    pa.agency,
+    pa.agency_digit,
+    pa.owner_name,
+    pa.owner_document,
+    pa.created_at,
+    pa.updated_at
+   FROM (((p_accs pac
+     JOIN public.project_accounts pa ON ((pa.id = pac.last_id)))
+     JOIN public.projects p ON ((pa.project_id = p.id)))
+     LEFT JOIN public.banks b ON ((b.id = pa.bank_id)))
+  WHERE public.is_owner_or_admin(pac.user_id);
+
 
 --
 -- Name: categories; Type: TABLE; Schema: 1; Owner: -; Tablespace: 
@@ -2711,6 +2897,44 @@ ALTER SEQUENCE authorizations_id_seq OWNED BY authorizations.id;
 
 
 --
+-- Name: balance_transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE balance_transactions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: balance_transactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE balance_transactions_id_seq OWNED BY balance_transactions.id;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE balance_transfers_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE balance_transfers_id_seq OWNED BY balance_transfers.id;
+
+
+--
 -- Name: bank_accounts; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -2746,19 +2970,6 @@ CREATE SEQUENCE bank_accounts_id_seq
 --
 
 ALTER SEQUENCE bank_accounts_id_seq OWNED BY bank_accounts.id;
-
-
---
--- Name: banks; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE banks (
-    id integer NOT NULL,
-    name text NOT NULL,
-    code text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone
-);
 
 
 --
@@ -4226,6 +4437,20 @@ ALTER TABLE ONLY authorizations ALTER COLUMN id SET DEFAULT nextval('authorizati
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
+ALTER TABLE ONLY balance_transactions ALTER COLUMN id SET DEFAULT nextval('balance_transactions_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transfers ALTER COLUMN id SET DEFAULT nextval('balance_transfers_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
 ALTER TABLE ONLY bank_accounts ALTER COLUMN id SET DEFAULT nextval('bank_accounts_id_seq'::regclass);
 
 
@@ -4604,6 +4829,22 @@ SET search_path = public, pg_catalog;
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT authorizations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: balance_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT balance_transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: balance_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY balance_transfers
+    ADD CONSTRAINT balance_transfers_pkey PRIMARY KEY (id);
 
 
 --
@@ -5082,6 +5323,20 @@ CREATE INDEX user_totals_id_idx ON user_totals USING btree (id);
 SET search_path = public, pg_catalog;
 
 --
+-- Name: event_contribution_uidx; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE UNIQUE INDEX event_contribution_uidx ON balance_transactions USING btree (contribution_id, event_name, user_id);
+
+
+--
+-- Name: event_project_uidx; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE UNIQUE INDEX event_project_uidx ON balance_transactions USING btree (project_id, event_name, user_id);
+
+
+--
 -- Name: fk__authorizations_oauth_provider_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -5093,6 +5348,41 @@ CREATE INDEX fk__authorizations_oauth_provider_id ON authorizations USING btree 
 --
 
 CREATE INDEX fk__authorizations_user_id ON authorizations USING btree (user_id);
+
+
+--
+-- Name: fk__balance_transactions_balance_transfer_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__balance_transactions_balance_transfer_id ON balance_transactions USING btree (balance_transfer_id);
+
+
+--
+-- Name: fk__balance_transactions_contribution_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__balance_transactions_contribution_id ON balance_transactions USING btree (contribution_id);
+
+
+--
+-- Name: fk__balance_transactions_project_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__balance_transactions_project_id ON balance_transactions USING btree (project_id);
+
+
+--
+-- Name: fk__balance_transactions_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__balance_transactions_user_id ON balance_transactions USING btree (user_id);
+
+
+--
+-- Name: fk__balance_transfers_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__balance_transfers_user_id ON balance_transfers USING btree (user_id);
 
 
 --
@@ -5958,6 +6248,13 @@ CREATE TRIGGER delete_project_reminder INSTEAD OF DELETE ON project_reminders FO
 
 
 --
+-- Name: insert_balance_transfer; Type: TRIGGER; Schema: 1; Owner: -
+--
+
+CREATE TRIGGER insert_balance_transfer INSTEAD OF INSERT ON balance_transfers FOR EACH ROW EXECUTE PROCEDURE public.insert_balance_transfer();
+
+
+--
 -- Name: insert_category_followers; Type: TRIGGER; Schema: 1; Owner: -
 --
 
@@ -6067,6 +6364,46 @@ ALTER TABLE ONLY authorizations
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT fk_authorizations_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
+-- Name: fk_balance_transactions_balance_transfer_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_balance_transfer_id FOREIGN KEY (balance_transfer_id) REFERENCES balance_transfers(id);
+
+
+--
+-- Name: fk_balance_transactions_contribution_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_contribution_id FOREIGN KEY (contribution_id) REFERENCES contributions(id);
+
+
+--
+-- Name: fk_balance_transactions_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
+-- Name: fk_balance_transactions_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
+-- Name: fk_balance_transfers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transfers
+    ADD CONSTRAINT fk_balance_transfers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
 
 
 --
@@ -6629,6 +6966,17 @@ GRANT SELECT ON TABLE flexible_projects TO PUBLIC;
 
 
 --
+-- Name: project_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE project_accounts FROM PUBLIC;
+REVOKE ALL ON TABLE project_accounts FROM catarse;
+GRANT ALL ON TABLE project_accounts TO catarse;
+GRANT SELECT ON TABLE project_accounts TO admin;
+GRANT SELECT ON TABLE project_accounts TO web_user;
+
+
+--
 -- Name: users; Type: ACL; Schema: public; Owner: -
 --
 
@@ -6684,7 +7032,92 @@ GRANT ALL ON TABLE payments TO catarse;
 GRANT SELECT ON TABLE payments TO admin;
 
 
+--
+-- Name: balance_transactions; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transactions FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transactions FROM catarse;
+GRANT ALL ON TABLE balance_transactions TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transactions TO web_user;
+GRANT SELECT,INSERT ON TABLE balance_transactions TO admin;
+
+
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transactions; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transactions FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transactions FROM catarse;
+GRANT ALL ON TABLE balance_transactions TO catarse;
+GRANT SELECT ON TABLE balance_transactions TO web_user;
+GRANT SELECT ON TABLE balance_transactions TO admin;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transfers; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transfers FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transfers FROM catarse;
+GRANT ALL ON TABLE balance_transfers TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO admin;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO web_user;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transfers; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transfers FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transfers FROM catarse;
+GRANT ALL ON TABLE balance_transfers TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO admin;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO web_user;
+
+
+--
+-- Name: balances; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balances FROM PUBLIC;
+REVOKE ALL ON TABLE balances FROM catarse;
+GRANT ALL ON TABLE balances TO catarse;
+GRANT SELECT ON TABLE balances TO web_user;
+GRANT SELECT ON TABLE balances TO admin;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: banks; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE banks FROM PUBLIC;
+REVOKE ALL ON TABLE banks FROM catarse;
+GRANT ALL ON TABLE banks TO catarse;
+GRANT SELECT ON TABLE banks TO admin;
+GRANT SELECT ON TABLE banks TO web_user;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: bank_accounts; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE bank_accounts FROM PUBLIC;
+REVOKE ALL ON TABLE bank_accounts FROM catarse;
+GRANT ALL ON TABLE bank_accounts TO catarse;
+GRANT SELECT ON TABLE bank_accounts TO admin;
+GRANT SELECT ON TABLE bank_accounts TO web_user;
+
 
 --
 -- Name: categories; Type: ACL; Schema: 1; Owner: -
@@ -7021,6 +7454,28 @@ GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
 SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transactions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON SEQUENCE balance_transactions_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE balance_transactions_id_seq FROM catarse;
+GRANT ALL ON SEQUENCE balance_transactions_id_seq TO catarse;
+GRANT USAGE ON SEQUENCE balance_transactions_id_seq TO admin;
+GRANT USAGE ON SEQUENCE balance_transactions_id_seq TO web_user;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON SEQUENCE balance_transfers_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE balance_transfers_id_seq FROM catarse;
+GRANT ALL ON SEQUENCE balance_transfers_id_seq TO catarse;
+GRANT USAGE ON SEQUENCE balance_transfers_id_seq TO admin;
+GRANT USAGE ON SEQUENCE balance_transfers_id_seq TO web_user;
+
 
 --
 -- Name: category_followers_id_seq; Type: ACL; Schema: public; Owner: -
