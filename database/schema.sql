@@ -31,6 +31,13 @@ CREATE SCHEMA financial;
 
 
 --
+-- Name: metrics; Type: SCHEMA; Schema: -; Owner: -
+--
+
+CREATE SCHEMA metrics;
+
+
+--
 -- Name: temp; Type: SCHEMA; Schema: -; Owner: -
 --
 
@@ -56,6 +63,20 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 --
 
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+
+
+--
+-- Name: plv8; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS plv8 WITH SCHEMA pg_catalog;
+
+
+--
+-- Name: EXTENSION plv8; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION plv8 IS 'PL/JavaScript (v8) trusted procedural language';
 
 
 --
@@ -237,6 +258,17 @@ CREATE FUNCTION mode(project projects) RETURNS text
 
 
 --
+-- Name: online_at(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION online_at(project projects) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $$
+        SELECT get_date_from_project_transitions(project.id, 'online');
+    $$;
+
+
+--
 -- Name: remaining_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -271,6 +303,17 @@ CREATE FUNCTION thumbnail_image(projects, size text) RETURNS text
                   '/uploads/project/uploaded_image/' || $1.id::text ||
                   '/project_thumb_' || size || '_' || $1.uploaded_image
             $_$;
+
+
+--
+-- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
+      $_$;
 
 
 SET search_path = "1", pg_catalog;
@@ -430,7 +473,7 @@ CREATE VIEW projects AS
     public.mode(p.*) AS mode,
     COALESCE(fp.state, (p.state)::text) AS state,
     public.state_order(p.*) AS state_order,
-    p.online_date,
+    public.zone_timestamp(public.online_at(p.*)) AS online_date,
     p.recommended,
     public.thumbnail_image(p.*, 'large'::text) AS project_img,
     public.remaining_time_json(p.*) AS remaining_time,
@@ -876,7 +919,7 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
 CREATE FUNCTION elapsed_time_json(projects) RETURNS json
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_date)
+            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_at)
         $_$;
 
 
@@ -1742,17 +1785,6 @@ CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
       $_$;
 
 
---
--- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
-      $_$;
-
-
 SET search_path = "time", pg_catalog;
 
 --
@@ -1860,8 +1892,8 @@ CREATE VIEW contribution_details AS
     p.permalink,
     p.name AS project_name,
     public.thumbnail_image(p.*) AS project_img,
-    p.online_date AS project_online_date,
-    p.expires_at AS project_expires_at,
+    public.zone_timestamp(public.online_at(p.*)) AS project_online_date,
+    public.zone_timestamp(p.expires_at) AS project_expires_at,
     (COALESCE(fp.state, (p.state)::text))::character varying(255) AS project_state,
     u.name AS user_name,
     public.thumbnail_image(u.*) AS user_profile_img,
@@ -1879,14 +1911,14 @@ CREATE VIEW contribution_details AS
     pa.gateway_fee,
     pa.gateway_data,
     pa.payment_method,
-    pa.created_at,
-    pa.created_at AS pending_at,
-    pa.paid_at,
-    pa.refused_at,
-    pa.pending_refund_at,
-    pa.refunded_at,
-    pa.deleted_at,
-    pa.chargeback_at,
+    public.zone_timestamp(pa.created_at) AS created_at,
+    public.zone_timestamp(pa.created_at) AS pending_at,
+    public.zone_timestamp(pa.paid_at) AS paid_at,
+    public.zone_timestamp(pa.refused_at) AS refused_at,
+    public.zone_timestamp(pa.pending_refund_at) AS pending_refund_at,
+    public.zone_timestamp(pa.refunded_at) AS refunded_at,
+    public.zone_timestamp(pa.deleted_at) AS deleted_at,
+    public.zone_timestamp(pa.chargeback_at) AS chargeback_at,
     pa.full_text_index,
     public.waiting_payment(pa.*) AS waiting_payment
    FROM ((((public.projects p
@@ -2704,16 +2736,17 @@ CREATE MATERIALIZED VIEW statistics AS
     ( SELECT count(*) AS total_projects,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'successful'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'successful'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_success,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'online'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'online'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_online
-           FROM public.projects
-          WHERE ((projects.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('rejected'::character varying)::text]))) projects_totals
+           FROM (public.projects p
+             LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+          WHERE (COALESCE(fp.state, (p.state)::text) <> ALL (ARRAY['draft'::text, 'rejected'::text]))) projects_totals
   WITH NO DATA;
 
 
@@ -2985,6 +3018,25 @@ CREATE VIEW payments_due_summary AS
    FROM project_payments_due p
   GROUP BY p.project_state, p.state, p.payment_method
   ORDER BY p.project_state, p.state, p.payment_method;
+
+
+SET search_path = metrics, pg_catalog;
+
+--
+-- Name: project_sessions; Type: TABLE; Schema: metrics; Owner: -; Tablespace: 
+--
+
+CREATE TABLE project_sessions (
+    page_path text NOT NULL,
+    user_type text NOT NULL,
+    date_hour text NOT NULL,
+    sessions integer NOT NULL,
+    browser text,
+    city text,
+    country text,
+    full_ref text,
+    permalink text NOT NULL
+);
 
 
 SET search_path = public, pg_catalog;
@@ -3901,6 +3953,39 @@ ALTER SEQUENCE project_budgets_id_seq OWNED BY project_budgets.id;
 
 
 --
+-- Name: project_errors; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE project_errors (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    error text,
+    to_state text NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE project_errors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE project_errors_id_seq OWNED BY project_errors.id;
+
+
+--
 -- Name: project_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4020,13 +4105,13 @@ CREATE VIEW projects_in_analysis_by_periods AS
          SELECT w.label,
             count(*) AS current_year
            FROM (projects p
-             JOIN weeks w ON ((w.current_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.current_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         ), last_year AS (
          SELECT w.label,
             count(*) AS last_year
            FROM (projects p
-             JOIN weeks w ON ((w.last_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.last_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         )
  SELECT current_year.label,
@@ -4667,17 +4752,6 @@ CREATE TABLE project_ranges (
 
 
 --
--- Name: slips_to_update_fee; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE slips_to_update_fee (
-    date timestamp without time zone,
-    gateway_id integer,
-    fee numeric
-);
-
-
---
 -- Name: sorbonne; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
 --
 
@@ -4979,6 +5053,13 @@ ALTER TABLE ONLY project_accounts ALTER COLUMN id SET DEFAULT nextval('project_a
 --
 
 ALTER TABLE ONLY project_budgets ALTER COLUMN id SET DEFAULT nextval('project_budgets_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors ALTER COLUMN id SET DEFAULT nextval('project_errors_id_seq'::regclass);
 
 
 --
@@ -5431,6 +5512,14 @@ ALTER TABLE ONLY project_budgets
 
 
 --
+-- Name: project_errors_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT project_errors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: project_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -5633,13 +5722,6 @@ ALTER TABLE ONLY workshops
 
 
 SET search_path = "1", pg_catalog;
-
---
--- Name: statistics_total_users_idx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX statistics_total_users_idx ON statistics USING btree (total_users);
-
 
 --
 -- Name: user_totals_id_idx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
@@ -5872,6 +5954,13 @@ CREATE INDEX fk__project_accounts_bank_id ON project_accounts USING btree (bank_
 --
 
 CREATE INDEX fk__project_budgets_project_id ON project_budgets USING btree (project_id);
+
+
+--
+-- Name: fk__project_errors_project_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__project_errors_project_id ON project_errors USING btree (project_id);
 
 
 --
@@ -6573,9 +6662,9 @@ CREATE RULE "_RETURN" AS
     public.state_order(p.*) AS state_order,
     p.expires_at,
     public.zone_timestamp(p.expires_at) AS zone_expires_at,
-    p.online_date,
-    public.zone_timestamp(p.online_date) AS zone_online_date,
-    p.sent_to_analysis_at,
+    public.online_at(p.*) AS online_date,
+    public.zone_timestamp(public.online_at(p.*)) AS zone_online_date,
+    public.zone_timestamp(public.in_analysis_at(p.*)) AS sent_to_analysis_at,
     public.is_published(p.*) AS is_published,
     public.is_expired(p.*) AS is_expired,
     public.open_for_contributions(p.*) AS open_for_contributions,
@@ -6602,7 +6691,7 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.cities ct ON ((ct.id = p.city_id)))
      LEFT JOIN public.states st ON ((st.id = ct.state_id)))
      LEFT JOIN public.project_reminders pr ON ((pr.project_id = p.id)))
-  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
+  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
 
 
 --
@@ -7024,6 +7113,14 @@ ALTER TABLE ONLY project_budgets
 
 
 --
+-- Name: fk_project_errors_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT fk_project_errors_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
 -- Name: fk_project_notifications_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7272,8 +7369,8 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
-REVOKE ALL ON SCHEMA public FROM catarse;
-GRANT ALL ON SCHEMA public TO catarse;
+REVOKE ALL ON SCHEMA public FROM ton;
+GRANT ALL ON SCHEMA public TO ton;
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
@@ -7329,8 +7426,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM catarse;
-GRANT ALL ON TABLE projects TO catarse;
+REVOKE ALL ON TABLE projects FROM ton;
+GRANT ALL ON TABLE projects TO ton;
 GRANT SELECT ON TABLE projects TO anonymous;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
@@ -7353,8 +7450,8 @@ GRANT SELECT ON TABLE payments TO admin;
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
-REVOKE ALL ON TABLE project_reminders FROM catarse;
-GRANT ALL ON TABLE project_reminders TO catarse;
+REVOKE ALL ON TABLE project_reminders FROM ton;
+GRANT ALL ON TABLE project_reminders TO ton;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 
@@ -7366,8 +7463,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
-REVOKE ALL ON TABLE categories FROM catarse;
-GRANT ALL ON TABLE categories TO catarse;
+REVOKE ALL ON TABLE categories FROM ton;
+GRANT ALL ON TABLE categories TO ton;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
@@ -7393,8 +7490,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE category_followers FROM PUBLIC;
-REVOKE ALL ON TABLE category_followers FROM catarse;
-GRANT ALL ON TABLE category_followers TO catarse;
+REVOKE ALL ON TABLE category_followers FROM ton;
+GRANT ALL ON TABLE category_followers TO ton;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 
@@ -7404,8 +7501,8 @@ GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
 --
 
 REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-REVOKE ALL ON TABLE category_totals FROM catarse;
-GRANT ALL ON TABLE category_totals TO catarse;
+REVOKE ALL ON TABLE category_totals FROM ton;
+GRANT ALL ON TABLE category_totals TO ton;
 GRANT SELECT ON TABLE category_totals TO admin;
 GRANT ALL ON TABLE category_totals TO catarse;
 
@@ -7415,8 +7512,8 @@ GRANT ALL ON TABLE category_totals TO catarse;
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
-REVOKE ALL ON TABLE contribution_details FROM catarse;
-GRANT ALL ON TABLE contribution_details TO catarse;
+REVOKE ALL ON TABLE contribution_details FROM ton;
+GRANT ALL ON TABLE contribution_details TO ton;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
 
 
@@ -7496,8 +7593,8 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE notifications FROM PUBLIC;
-REVOKE ALL ON TABLE notifications FROM catarse;
-GRANT ALL ON TABLE notifications TO catarse;
+REVOKE ALL ON TABLE notifications FROM ton;
+GRANT ALL ON TABLE notifications TO ton;
 GRANT SELECT ON TABLE notifications TO admin;
 
 
@@ -7542,8 +7639,8 @@ GRANT SELECT ON TABLE project_contributions_per_day TO admin;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_location FROM catarse;
-GRANT ALL ON TABLE project_contributions_per_location TO catarse;
+REVOKE ALL ON TABLE project_contributions_per_location FROM ton;
+GRANT ALL ON TABLE project_contributions_per_location TO ton;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
@@ -7555,12 +7652,11 @@ GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 --
 
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
-REVOKE ALL ON TABLE project_contributions_per_ref FROM catarse;
-GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
+REVOKE ALL ON TABLE project_contributions_per_ref FROM ton;
+GRANT ALL ON TABLE project_contributions_per_ref TO ton;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
-GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 
 
 --
@@ -7568,8 +7664,8 @@ GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 --
 
 REVOKE ALL ON TABLE project_details FROM PUBLIC;
-REVOKE ALL ON TABLE project_details FROM catarse;
-GRANT ALL ON TABLE project_details TO catarse;
+REVOKE ALL ON TABLE project_details FROM ton;
+GRANT ALL ON TABLE project_details TO ton;
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
@@ -7580,8 +7676,8 @@ GRANT SELECT ON TABLE project_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
-REVOKE ALL ON TABLE project_financials FROM catarse;
-GRANT ALL ON TABLE project_financials TO catarse;
+REVOKE ALL ON TABLE project_financials FROM ton;
+GRANT ALL ON TABLE project_financials TO ton;
 GRANT SELECT ON TABLE project_financials TO web_user;
 GRANT SELECT ON TABLE project_financials TO admin;
 GRANT ALL ON TABLE project_financials TO catarse;
@@ -7615,8 +7711,8 @@ GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
 --
 
 REVOKE ALL ON TABLE project_transfers FROM PUBLIC;
-REVOKE ALL ON TABLE project_transfers FROM catarse;
-GRANT ALL ON TABLE project_transfers TO catarse;
+REVOKE ALL ON TABLE project_transfers FROM ton;
+GRANT ALL ON TABLE project_transfers TO ton;
 GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
 
 
@@ -7625,9 +7721,11 @@ GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
 --
 
 REVOKE ALL ON TABLE project_transitions FROM PUBLIC;
-REVOKE ALL ON TABLE project_transitions FROM catarse;
-GRANT ALL ON TABLE project_transitions TO catarse;
+REVOKE ALL ON TABLE project_transitions FROM ton;
+GRANT ALL ON TABLE project_transitions TO ton;
 GRANT SELECT ON TABLE project_transitions TO admin;
+GRANT SELECT ON TABLE project_transitions TO web_user;
+GRANT SELECT ON TABLE project_transitions TO anonymous;
 
 
 --
@@ -7668,8 +7766,8 @@ GRANT SELECT ON TABLE reward_details TO anonymous;
 --
 
 REVOKE ALL ON TABLE statistics FROM PUBLIC;
-REVOKE ALL ON TABLE statistics FROM catarse;
-GRANT ALL ON TABLE statistics TO catarse;
+REVOKE ALL ON TABLE statistics FROM ton;
+GRANT ALL ON TABLE statistics TO ton;
 GRANT SELECT ON TABLE statistics TO admin;
 GRANT SELECT ON TABLE statistics TO web_user;
 GRANT SELECT ON TABLE statistics TO anonymous;
@@ -7813,8 +7911,8 @@ GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
 --
 
 REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM PUBLIC;
-REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM catarse;
-GRANT ALL ON SEQUENCE project_reminders_id_seq TO catarse;
+REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM ton;
+GRANT ALL ON SEQUENCE project_reminders_id_seq TO ton;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO web_user;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO admin;
 
