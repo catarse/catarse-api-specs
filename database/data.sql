@@ -66,6 +66,14 @@ INSERT INTO public.flexible_project_transitions (id, flexible_project_id, to_sta
 REFRESH MATERIALIZED VIEW "1".user_totals;
 REFRESH MATERIALIZED VIEW "1".statistics;
 
+INSERT INTO balance_transactions (project_id, event_name, user_id, amount) VALUES
+       (5, 'successful_project_pledged', 1, 100),
+       (5, 'catarse_project_service_fee', 1, -13);
+
+INSERT INTO balance_transactions (event_name, user_id, amount) VALUES
+       ('for_fun_credits', 2, 10);
+
+
 /*
  * Create all data that will be modified bellow
  * Add a comment with the file name where it is used.
@@ -80,12 +88,3 @@ INSERT INTO contributions (id, project_id, user_id, value, payer_email) VALUES
 
 INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, value) VALUES
     (1, 1, 'paid', 'key 1', 'Payment Gateway', 'Credit Card', 10);
-
--- balances.yml
-INSERT INTO balance_transactions (id, project_id, event_name, user_id, amount) VALUES
-       (1, 5, 'successful_project_pledged', 1, 100),
-       (2, 5, 'catarse_project_service_fee', 1, -13);
-       
-INSERT INTO balance_transactions (id, event_name, user_id, amount) VALUES
-       (3, 'for_fun_credits', 2, 10);
-
