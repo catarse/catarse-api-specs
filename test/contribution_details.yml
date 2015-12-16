@@ -15,3 +15,10 @@
   - validators:
     - compare: {jsonpath_mini: '0.user_id', comparator: 'eq', expected: 1}
 
+- test:
+  - name: "Update an user from Contribution Details as admin"
+  - url: "/contribution_details?id=eq.1"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjEifQ.A3Q6QBAjrEq2X2avTevFx_H8ZVU-BYk5WDwdnaUZBdg', 'Content-Type': 'application/json'}
+  - method: "PATCH"
+  - body: '{"user_id": 2}'
+  - expected_status: [204]
