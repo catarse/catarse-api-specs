@@ -1,2 +1,2 @@
-pyresttest==1.6.0
+-e git+https://github.com/svanoort/pyresttest.git#egg=pyresttest
 click==5.1
