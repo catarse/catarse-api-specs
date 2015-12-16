@@ -37,9 +37,10 @@ INSERT INTO public.cities (id, name, state_id) VALUES
 INSERT INTO public.categories (id, name_pt) VALUES
     (1, 'Música');
 
-INSERT INTO public.users (id, email, name) VALUES
-    (1, 'relaizador@bar.com', 'Realizador de vários projetos'),
-    (2, 'apoiador@bar.com', 'Apoiador');
+INSERT INTO public.users (id, email, name, admin) VALUES
+    (1, 'relaizador@bar.com', 'Realizador de vários projetos', FALSE),
+    (2, 'apoiador@bar.com', 'Apoiador', FALSE),
+    (3, 'chuck@norris.com', 'Admin', TRUE);
 
 INSERT INTO public.category_followers (category_id, user_id) VALUES
     (1, 1);
