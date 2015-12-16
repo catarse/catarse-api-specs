@@ -1,0 +1,14 @@
+
+---
+- config:
+  - testset: "notifications"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/notifications"
+  - expected_status: [404]
+
+- test:
+  - url: "/notifications"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
+  - expected_status: [200]

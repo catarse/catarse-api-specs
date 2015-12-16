@@ -39,6 +39,8 @@ if [[ $? -ne 0 ]]; then
     tail -n 5 $schema_log
     exit 1
 fi
+
+echo "Populating database..."
 psql --set ON_ERROR_STOP=1 -v db=$db $db < ./database/data.sql > $data_log 2>&1
 if [[ $? -ne 0 ]]; then
     echo "Error restoring test data. Take a look at ${data_log}:"
