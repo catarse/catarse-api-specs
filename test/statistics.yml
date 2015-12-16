@@ -5,3 +5,5 @@
 - test:
   - name: "Basic get"
   - url: "/statistics"
+  - validators:
+    - compare: {jsonpath_mini: '0.total_projects_online', comparator: 'str_eq', expected: '2'}

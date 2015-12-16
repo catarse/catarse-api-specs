@@ -24,27 +24,6 @@ CREATE SCHEMA api_updates;
 
 
 --
--- Name: financial; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA financial;
-
-
---
--- Name: temp; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA temp;
-
-
---
--- Name: time; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA "time";
-
-
---
 -- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -56,20 +35,6 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 --
 
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
-
-
---
--- Name: pg_stat_statements; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;
-
-
---
--- Name: EXTENSION pg_stat_statements; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION pg_stat_statements IS 'track execution statistics of all SQL statements executed';
 
 
 --
@@ -101,20 +66,6 @@ COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
 
 
 --
--- Name: tablefunc; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS tablefunc WITH SCHEMA public;
-
-
---
--- Name: EXTENSION tablefunc; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION tablefunc IS 'functions that manipulate whole tables, including crosstab';
-
-
---
 -- Name: unaccent; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -126,20 +77,6 @@ CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
 --
 
 COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents';
-
-
---
--- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
---
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-
-
---
--- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
 
 
 SET search_path = public, pg_catalog;
@@ -237,6 +174,17 @@ CREATE FUNCTION mode(project projects) RETURNS text
 
 
 --
+-- Name: online_at(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION online_at(project projects) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $$
+        SELECT get_date_from_project_transitions(project.id, 'online');
+    $$;
+
+
+--
 -- Name: remaining_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -271,6 +219,17 @@ CREATE FUNCTION thumbnail_image(projects, size text) RETURNS text
                   '/uploads/project/uploaded_image/' || $1.id::text ||
                   '/project_thumb_' || size || '_' || $1.uploaded_image
             $_$;
+
+
+--
+-- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
+      $_$;
 
 
 SET search_path = "1", pg_catalog;
@@ -430,7 +389,7 @@ CREATE VIEW projects AS
     public.mode(p.*) AS mode,
     COALESCE(fp.state, (p.state)::text) AS state,
     public.state_order(p.*) AS state_order,
-    p.online_date,
+    public.zone_timestamp(public.online_at(p.*)) AS online_date,
     p.recommended,
     public.thumbnail_image(p.*, 'large'::text) AS project_img,
     public.remaining_time_json(p.*) AS remaining_time,
@@ -483,24 +442,6 @@ $$;
 SET search_path = public, pg_catalog;
 
 --
--- Name: _final_median(numeric[]); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION _final_median(numeric[]) RETURNS numeric
-    LANGUAGE sql IMMUTABLE
-    AS $_$
-   SELECT AVG(val)
-   FROM (
-     SELECT val
-     FROM unnest($1) val
-     ORDER BY 1
-     LIMIT  2 - MOD(array_upper($1, 1), 2)
-     OFFSET CEIL(array_upper($1, 1) / 2.0) - 1
-   ) sub;
-$_$;
-
-
---
 -- Name: approved_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -525,53 +466,6 @@ BEGIN
   RETURN;
 END;
 $_$;
-
-
---
--- Name: payments; Type: TABLE; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE TABLE payments (
-    id integer NOT NULL,
-    contribution_id integer NOT NULL,
-    state text NOT NULL,
-    key text NOT NULL,
-    gateway text NOT NULL,
-    gateway_id text,
-    gateway_fee numeric,
-    gateway_data json,
-    payment_method text NOT NULL,
-    value numeric NOT NULL,
-    installments integer DEFAULT 1 NOT NULL,
-    installment_value numeric,
-    paid_at timestamp without time zone,
-    refused_at timestamp without time zone,
-    pending_refund_at timestamp without time zone,
-    refunded_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    full_text_index tsvector,
-    deleted_at timestamp without time zone,
-    chargeback_at timestamp without time zone
-);
-
-
---
--- Name: can_delete(payments); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION can_delete(payments) RETURNS boolean
-    LANGUAGE sql
-    AS $_$
-      SELECT
-               $1.state = 'pending'
-               AND
-               (
-                 SELECT count(1) AS total_of_days
-                 FROM generate_series($1.created_at::date, current_date, '1 day') day
-                 WHERE extract(dow from day) not in (0,1)
-               )  >= 4
-     $_$;
 
 
 --
@@ -635,8 +529,8 @@ CREATE TABLE contributions (
     payment_choice text,
     payment_service_fee numeric,
     referral_link text,
-    deleted_at timestamp without time zone,
     country_id integer,
+    deleted_at timestamp without time zone,
     donation_id integer,
     origin_id integer,
     CONSTRAINT backers_value_positive CHECK ((value >= (0)::numeric))
@@ -876,7 +770,7 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
 CREATE FUNCTION elapsed_time_json(projects) RETURNS json
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_date)
+            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_at)
         $_$;
 
 
@@ -1108,6 +1002,35 @@ CREATE FUNCTION is_published(projects) RETURNS boolean
 
 
 --
+-- Name: payments; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE payments (
+    id integer NOT NULL,
+    contribution_id integer NOT NULL,
+    state text NOT NULL,
+    key text NOT NULL,
+    gateway text NOT NULL,
+    gateway_id text,
+    gateway_fee numeric,
+    gateway_data json,
+    payment_method text NOT NULL,
+    value numeric NOT NULL,
+    installments integer DEFAULT 1 NOT NULL,
+    installment_value numeric,
+    paid_at timestamp without time zone,
+    refused_at timestamp without time zone,
+    pending_refund_at timestamp without time zone,
+    refunded_at timestamp without time zone,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    full_text_index tsvector,
+    deleted_at timestamp without time zone,
+    chargeback_at timestamp without time zone
+);
+
+
+--
 -- Name: is_second_slip(payments); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1239,23 +1162,6 @@ CREATE FUNCTION pcc_tax(project projects) RETURNS numeric
             ON pa.project_id = p.id
         WHERE p.id = project.id;
     $$;
-
-
---
--- Name: percentage_funded(integer, integer); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION percentage_funded(project_id integer, days_before_expires integer) RETURNS integer
-    LANGUAGE sql
-    AS $_$
-	SELECT 
-		((sum(c.value)::numeric / (SELECT p.goal::numeric FROM projects p WHERE p.id = $1)) * 100)::int
-	FROM
-		contribution_details c
-	WHERE 
-		c.project_id = $1
-		AND ((SELECT p.expires_at FROM projects p WHERE p.id = $1)::date - c.paid_at::date) >= $2;
-$_$;
 
 
 --
@@ -1742,42 +1648,6 @@ CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
       $_$;
 
 
---
--- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
-      $_$;
-
-
-SET search_path = "time", pg_catalog;
-
---
--- Name: past_months(integer); Type: FUNCTION; Schema: time; Owner: -
---
-
-CREATE FUNCTION past_months(integer) RETURNS SETOF daterange
-    LANGUAGE sql
-    AS $_$SELECT daterange(to_char(generate_series::date, 'yyyy-mm-01')::date, to_char((generate_series + '1 month'::interval), 'yyyy-mm-01')::date) as month from generate_series(current_timestamp - ($1 || ' months')::interval, current_timestamp, '1 month')$_$;
-
-
-SET search_path = public, pg_catalog;
-
---
--- Name: median(numeric); Type: AGGREGATE; Schema: public; Owner: -
---
-
-CREATE AGGREGATE median(numeric) (
-    SFUNC = array_append,
-    STYPE = numeric[],
-    INITCOND = '{}',
-    FINALFUNC = _final_median
-);
-
-
 SET search_path = "1", pg_catalog;
 
 --
@@ -1824,29 +1694,6 @@ CREATE VIEW category_followers AS
 
 
 --
--- Name: category_totals; Type: TABLE; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE TABLE category_totals (
-    category_id integer,
-    name text,
-    online_projects bigint,
-    successful_projects bigint,
-    failed_projects bigint,
-    avg_goal numeric,
-    avg_pledged numeric,
-    total_successful_value numeric,
-    total_value numeric,
-    name_pt text,
-    avg_value numeric,
-    total_contributors bigint,
-    followers bigint
-);
-
-ALTER TABLE ONLY category_totals REPLICA IDENTITY NOTHING;
-
-
---
 -- Name: contribution_details; Type: VIEW; Schema: 1; Owner: -
 --
 
@@ -1860,8 +1707,8 @@ CREATE VIEW contribution_details AS
     p.permalink,
     p.name AS project_name,
     public.thumbnail_image(p.*) AS project_img,
-    p.online_date AS project_online_date,
-    p.expires_at AS project_expires_at,
+    public.zone_timestamp(public.online_at(p.*)) AS project_online_date,
+    public.zone_timestamp(p.expires_at) AS project_expires_at,
     (COALESCE(fp.state, (p.state)::text))::character varying(255) AS project_state,
     u.name AS user_name,
     public.thumbnail_image(u.*) AS user_profile_img,
@@ -1879,14 +1726,14 @@ CREATE VIEW contribution_details AS
     pa.gateway_fee,
     pa.gateway_data,
     pa.payment_method,
-    pa.created_at,
-    pa.created_at AS pending_at,
-    pa.paid_at,
-    pa.refused_at,
-    pa.pending_refund_at,
-    pa.refunded_at,
-    pa.deleted_at,
-    pa.chargeback_at,
+    public.zone_timestamp(pa.created_at) AS created_at,
+    public.zone_timestamp(pa.created_at) AS pending_at,
+    public.zone_timestamp(pa.paid_at) AS paid_at,
+    public.zone_timestamp(pa.refused_at) AS refused_at,
+    public.zone_timestamp(pa.pending_refund_at) AS pending_refund_at,
+    public.zone_timestamp(pa.refunded_at) AS refunded_at,
+    public.zone_timestamp(pa.deleted_at) AS deleted_at,
+    public.zone_timestamp(pa.chargeback_at) AS chargeback_at,
     pa.full_text_index,
     public.waiting_payment(pa.*) AS waiting_payment
    FROM ((((public.projects p
@@ -2004,20 +1851,6 @@ CREATE VIEW contributions AS
     c.reward_id,
     c.created_at
    FROM public.contributions c;
-
-
---
--- Name: financial_reports; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW financial_reports AS
- SELECT p.name,
-    u.moip_login,
-    p.goal,
-    p.expires_at,
-    p.state
-   FROM (public.projects p
-     JOIN public.users u ON ((u.id = p.user_id)));
 
 
 SET search_path = public, pg_catalog;
@@ -2469,41 +2302,6 @@ ALTER TABLE ONLY project_details REPLICA IDENTITY NOTHING;
 
 
 --
--- Name: project_financials; Type: VIEW; Schema: 1; Owner: -
---
-
-CREATE VIEW project_financials AS
- WITH catarse_fee_percentage AS (
-         SELECT (c.value)::numeric AS total,
-            ((1)::numeric - (c.value)::numeric) AS complement
-           FROM public.settings c
-          WHERE (c.name = 'catarse_fee'::text)
-        ), catarse_base_url AS (
-         SELECT c.value
-           FROM public.settings c
-          WHERE (c.name = 'base_url'::text)
-        )
- SELECT p.id AS project_id,
-    p.name,
-    u.moip_login AS moip,
-    p.goal,
-    pt.pledged AS reached,
-    pt.total_payment_service_fee AS payment_tax,
-    (cp.total * pt.pledged) AS catarse_fee,
-    (pt.pledged * cp.complement) AS repass_value,
-    to_char(timezone(COALESCE(( SELECT settings.value
-           FROM public.settings
-          WHERE (settings.name = 'timezone'::text)), 'America/Sao_Paulo'::text), p.expires_at), 'dd/mm/yyyy'::text) AS expires_at,
-    ((catarse_base_url.value || '/admin/reports/contribution_reports.csv?project_id='::text) || p.id) AS contribution_report,
-    p.state
-   FROM ((((public.projects p
-     JOIN public.users u ON ((u.id = p.user_id)))
-     LEFT JOIN project_totals pt ON ((pt.project_id = p.id)))
-     CROSS JOIN catarse_fee_percentage cp)
-     CROSS JOIN catarse_base_url);
-
-
---
 -- Name: project_posts_details; Type: VIEW; Schema: 1; Owner: -
 --
 
@@ -2704,16 +2502,17 @@ CREATE MATERIALIZED VIEW statistics AS
     ( SELECT count(*) AS total_projects,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'successful'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'successful'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_success,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'online'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'online'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_online
-           FROM public.projects
-          WHERE ((projects.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('rejected'::character varying)::text]))) projects_totals
+           FROM (public.projects p
+             LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+          WHERE (COALESCE(fp.state, (p.state)::text) <> ALL (ARRAY['draft'::text, 'rejected'::text]))) projects_totals
   WITH NO DATA;
 
 
@@ -2861,54 +2660,6 @@ CREATE VIEW users AS
    FROM public.users u;
 
 
---
--- Name: year_totals; Type: MATERIALIZED VIEW; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE MATERIALIZED VIEW year_totals AS
- WITH year_totals AS (
-         SELECT to_char(p.paid_at, 'yyyy'::text) AS ano,
-            count(DISTINCT
-                CASE
-                    WHEN ((pr.state)::text = 'successful'::text) THEN c.user_id
-                    ELSE NULL::integer
-                END) AS "Usuários em projetos bem sucedidos",
-            count(DISTINCT c.user_id) AS "Apoiadores distintos no ano",
-            sum(c.value) AS "Total de apoios",
-            sum(
-                CASE
-                    WHEN ((pr.state)::text = 'successful'::text) THEN c.value
-                    ELSE NULL::numeric
-                END) AS "Total em projetos bem sucedidos",
-            round((sum(c.value) / (count(DISTINCT c.user_id))::numeric), 2) AS "Apoio médio por usuário"
-           FROM ((public.projects pr
-             JOIN public.contributions c ON ((c.project_id = pr.id)))
-             JOIN public.payments p ON ((p.contribution_id = c.id)))
-          WHERE (p.state = ANY (public.confirmed_states()))
-          GROUP BY to_char(p.paid_at, 'yyyy'::text)
-        ), new_contributors AS (
-         SELECT a.ano,
-            count(*) AS count
-           FROM ( SELECT min(to_char(p.paid_at, 'yyyy'::text)) AS ano,
-                    c.user_id
-                   FROM (public.contributions c
-                     JOIN public.payments p ON ((p.contribution_id = c.id)))
-                  WHERE ((p.state = ANY (public.confirmed_states())) AND (p.paid_at IS NOT NULL))
-                  GROUP BY c.user_id) a
-          GROUP BY a.ano
-        )
- SELECT yt.ano,
-    yt."Usuários em projetos bem sucedidos",
-    yt."Apoiadores distintos no ano",
-    nc.count AS "Usuários novos por ano",
-    yt."Total de apoios",
-    yt."Total em projetos bem sucedidos",
-    yt."Apoio médio por usuário"
-   FROM (year_totals yt
-     JOIN new_contributors nc USING (ano))
-  WITH NO DATA;
-
-
 SET search_path = api_updates, pg_catalog;
 
 --
@@ -2924,69 +2675,6 @@ CREATE TABLE contributions (
 );
 
 
-SET search_path = financial, pg_catalog;
-
---
--- Name: payment_due_dates; Type: VIEW; Schema: financial; Owner: -
---
-
-CREATE VIEW payment_due_dates AS
- SELECT p.id,
-    p.contribution_id,
-    p.payment_method,
-    p.state,
-    p.paid_at,
-    gs.gs AS installment,
-    p.installment_value,
-    (p.gateway_fee / (p.installments)::numeric) AS installment_fee,
-        CASE p.payment_method
-            WHEN 'CartaoDeCredito'::text THEN (p.paid_at + (((gs.gs)::text || ' months'::text))::interval)
-            ELSE p.paid_at
-        END AS due_date
-   FROM (generate_series(1, 24) gs(gs)
-     JOIN public.payments p ON ((p.installments >= gs.gs)))
-  WHERE ((lower(p.gateway) = 'pagarme'::text) AND (p.state = ANY (ARRAY['paid'::text, 'pending_refund'::text])));
-
-
---
--- Name: project_payments_due; Type: VIEW; Schema: financial; Owner: -
---
-
-CREATE VIEW project_payments_due AS
- SELECT p.permalink,
-    p.state AS project_state,
-    dd.payment_method,
-    dd.state,
-    dd.paid_at,
-    dd.installment,
-        CASE
-            WHEN ((p.state)::text = 'successful'::text) THEN (dd.installment_value * ((1)::numeric - ( SELECT (settings.value)::numeric AS value
-               FROM public.settings
-              WHERE (settings.name = 'catarse_fee'::text))))
-            ELSE (dd.installment_value - dd.installment_fee)
-        END AS value,
-    dd.installment_fee
-   FROM ((public.projects p
-     JOIN public.contributions c ON ((c.project_id = p.id)))
-     JOIN payment_due_dates dd ON ((dd.contribution_id = c.id)))
-  WHERE ((p.state)::text = ANY (ARRAY[('online'::character varying)::text, ('failed'::character varying)::text, ('successful'::character varying)::text, ('waiting_funds'::character varying)::text]))
-  ORDER BY p.id DESC;
-
-
---
--- Name: payments_due_summary; Type: VIEW; Schema: financial; Owner: -
---
-
-CREATE VIEW payments_due_summary AS
- SELECT p.project_state,
-    p.state,
-    p.payment_method,
-    round(sum(p.value), 2) AS value
-   FROM project_payments_due p
-  GROUP BY p.project_state, p.state, p.payment_method
-  ORDER BY p.project_state, p.state, p.payment_method;
-
-
 SET search_path = public, pg_catalog;
 
 --
@@ -2998,8 +2686,8 @@ CREATE TABLE authorizations (
     oauth_provider_id integer NOT NULL,
     user_id integer NOT NULL,
     uid text NOT NULL,
-    created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone NOT NULL
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone
 );
 
 
@@ -3266,8 +2954,8 @@ CREATE TABLE channels (
     name text NOT NULL,
     description text NOT NULL,
     permalink text NOT NULL,
-    created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
     twitter text,
     facebook text,
     email text,
@@ -3596,6 +3284,20 @@ ALTER SEQUENCE donations_id_seq OWNED BY donations.id;
 
 
 --
+-- Name: financial_reports; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW financial_reports AS
+ SELECT p.name,
+    u.moip_login,
+    p.goal,
+    p.expires_at,
+    p.state
+   FROM (projects p
+     JOIN users u ON ((u.id = p.user_id)));
+
+
+--
 -- Name: flexible_project_states; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -3849,6 +3551,57 @@ ALTER SEQUENCE payments_id_seq OWNED BY payments.id;
 
 
 --
+-- Name: paypal_payments; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE paypal_payments (
+    data text,
+    hora text,
+    fusohorario text,
+    nome text,
+    tipo text,
+    status text,
+    moeda text,
+    valorbruto text,
+    tarifa text,
+    liquido text,
+    doe_mail text,
+    parae_mail text,
+    iddatransacao text,
+    statusdoequivalente text,
+    statusdoendereco text,
+    titulodoitem text,
+    iddoitem text,
+    valordoenvioemanuseio text,
+    valordoseguro text,
+    impostosobrevendas text,
+    opcao1nome text,
+    opcao1valor text,
+    opcao2nome text,
+    opcao2valor text,
+    sitedoleilao text,
+    iddocomprador text,
+    urldoitem text,
+    datadetermino text,
+    iddaescritura text,
+    iddafatura text,
+    "idtxn_dereferência" text,
+    numerodafatura text,
+    numeropersonalizado text,
+    iddorecibo text,
+    saldo text,
+    enderecolinha1 text,
+    enderecolinha2_distrito_bairro text,
+    cidade text,
+    "estado_regiao_território_prefeitura_republica" text,
+    cep text,
+    pais text,
+    numerodotelefoneparacontato text,
+    extra text
+);
+
+
+--
 -- Name: project_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3898,6 +3651,74 @@ CREATE SEQUENCE project_budgets_id_seq
 --
 
 ALTER SEQUENCE project_budgets_id_seq OWNED BY project_budgets.id;
+
+
+--
+-- Name: project_errors; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE project_errors (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    error text,
+    to_state text NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE project_errors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE project_errors_id_seq OWNED BY project_errors.id;
+
+
+--
+-- Name: project_financials; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW project_financials AS
+ WITH catarse_fee_percentage AS (
+         SELECT (c.value)::numeric AS total,
+            ((1)::numeric - (c.value)::numeric) AS complement
+           FROM settings c
+          WHERE (c.name = 'catarse_fee'::text)
+        ), catarse_base_url AS (
+         SELECT c.value
+           FROM settings c
+          WHERE (c.name = 'base_url'::text)
+        )
+ SELECT p.id AS project_id,
+    p.name,
+    u.moip_login AS moip,
+    p.goal,
+    pt.pledged AS reached,
+    pt.total_payment_service_fee AS payment_tax,
+    (cp.total * pt.pledged) AS catarse_fee,
+    (pt.pledged * cp.complement) AS repass_value,
+    to_char(timezone(COALESCE(( SELECT settings.value
+           FROM settings
+          WHERE (settings.name = 'timezone'::text)), 'America/Sao_Paulo'::text), p.expires_at), 'dd/mm/yyyy'::text) AS expires_at,
+    ((catarse_base_url.value || '/admin/reports/contribution_reports.csv?project_id='::text) || p.id) AS contribution_report,
+    p.state
+   FROM ((((projects p
+     JOIN users u ON ((u.id = p.user_id)))
+     LEFT JOIN "1".project_totals pt ON ((pt.project_id = p.id)))
+     CROSS JOIN catarse_fee_percentage cp)
+     CROSS JOIN catarse_base_url);
 
 
 --
@@ -4020,13 +3841,13 @@ CREATE VIEW projects_in_analysis_by_periods AS
          SELECT w.label,
             count(*) AS current_year
            FROM (projects p
-             JOIN weeks w ON ((w.current_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.current_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         ), last_year AS (
          SELECT w.label,
             count(*) AS last_year
            FROM (projects p
-             JOIN weeks w ON ((w.last_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.last_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         )
  SELECT current_year.label,
@@ -4238,6 +4059,17 @@ ALTER SEQUENCE tags_id_seq OWNED BY tags.id;
 
 
 --
+-- Name: total_backed_ranges; Type: TABLE; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE TABLE total_backed_ranges (
+    name text NOT NULL,
+    lower numeric,
+    upper numeric
+);
+
+
+--
 -- Name: unsubscribes; Type: TABLE; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -4382,380 +4214,6 @@ CREATE SEQUENCE users_id_seq
 
 ALTER SEQUENCE users_id_seq OWNED BY users.id;
 
-
-SET search_path = temp, pg_catalog;
-
---
--- Name: apoios_moip; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE apoios_moip (
-    key text
-);
-
-
---
--- Name: apoios_moip7_8; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE apoios_moip7_8 (
-    key text
-);
-
-
---
--- Name: apoios_moip_0106_2210; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE apoios_moip_0106_2210 (
-    key text
-);
-
-
---
--- Name: apoios_paypal; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE apoios_paypal (
-    id text
-);
-
-
---
--- Name: apoios_paypal_0106_2210; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE apoios_paypal_0106_2210 (
-    payment_id text
-);
-
-
---
--- Name: budget_before_redactor; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE budget_before_redactor (
-    id integer,
-    budget text
-);
-
-
---
--- Name: contributions_to_confirm; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE contributions_to_confirm (
-    user_id integer,
-    id integer,
-    value numeric,
-    "data catarse" timestamp without time zone,
-    "data pagarme" text,
-    transaction_payment_id text,
-    state character varying(255),
-    permalink text
-);
-
-
---
--- Name: contributions_to_fix; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE contributions_to_fix (
-    contribution_id integer,
-    payment_id text,
-    pagarme_state text,
-    key text,
-    value numeric,
-    payer_email text
-);
-
-
---
--- Name: fixed_amex_rates; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE fixed_amex_rates (
-    id integer,
-    payment_service_fee numeric
-);
-
-
---
--- Name: lista_ceps; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE lista_ceps (
-    id character varying(255),
-    cep character varying(255)
-);
-
-
---
--- Name: lost_thumbs; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE lost_thumbs (
-    id integer
-);
-
-
---
--- Name: moip_jan_2014_backers; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE moip_jan_2014_backers (
-    key text NOT NULL,
-    moip_confirmed_date text,
-    moip_confirmed_time text,
-    moip_status text
-);
-
-
---
--- Name: moip_payments; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE moip_payments (
-    id_moip text,
-    key text,
-    forma_pagamento text,
-    descricao text,
-    nome_comprador text,
-    email_comprador text,
-    data_inicial text,
-    data_autorizacao text,
-    data_conclusao text,
-    data_atualizacao text,
-    status text,
-    substatus text,
-    valor_total text,
-    taxa_total text,
-    pricing text,
-    valor_fixo text,
-    porcentagem text,
-    porcentagem_antecipacao text,
-    nova_taxa text,
-    antecipacao text,
-    taxa_antecipacao text,
-    valor_liquido text,
-    valor_moip text,
-    valor_comissao text,
-    parcelas text,
-    id_lojista text
-);
-
-
---
--- Name: pagarme_audit; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE pagarme_audit (
-    label text,
-    contribution_id text,
-    contribution_state text,
-    transaction_installments text,
-    transaction_payment_id text,
-    transaction_amount text,
-    transaction_status text,
-    transaction_created text,
-    transaction_customer_email text
-);
-
-
---
--- Name: paypal_7_8; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE paypal_7_8 (
-    key text
-);
-
-
---
--- Name: paypal_dez_2013_backers; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE paypal_dez_2013_backers (
-    payment_id text NOT NULL,
-    paypal_confirmed_date text,
-    paypal_confirmed_time text,
-    paypal_status text
-);
-
-
---
--- Name: paypal_jan_2014_backers; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE paypal_jan_2014_backers (
-    payment_id text NOT NULL,
-    paypal_confirmed_date text,
-    paypal_confirmed_time text,
-    paypal_status text
-);
-
-
---
--- Name: paypal_payments; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE paypal_payments (
-    data text,
-    hora text,
-    fusohorario text,
-    nome text,
-    tipo text,
-    status text,
-    moeda text,
-    valorbruto text,
-    tarifa text,
-    liquido text,
-    doe_mail text,
-    parae_mail text,
-    iddatransacao text,
-    statusdoequivalente text,
-    statusdoendereco text,
-    titulodoitem text,
-    iddoitem text,
-    valordoenvioemanuseio text,
-    valordoseguro text,
-    impostosobrevendas text,
-    opcao1nome text,
-    opcao1valor text,
-    opcao2nome text,
-    opcao2valor text,
-    sitedoleilao text,
-    iddocomprador text,
-    urldoitem text,
-    datadetermino text,
-    iddaescritura text,
-    iddafatura text,
-    "idtxn_dereferência" text,
-    numerodafatura text,
-    numeropersonalizado text,
-    iddorecibo text,
-    saldo text,
-    enderecolinha1 text,
-    enderecolinha2_distrito_bairro text,
-    cidade text,
-    "estado_regiao_território_prefeitura_republica" text,
-    cep text,
-    pais text,
-    numerodotelefoneparacontato text,
-    extra text
-);
-
-
---
--- Name: paypal_temp_backers; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE paypal_temp_backers (
-    payment_id text NOT NULL
-);
-
-
---
--- Name: project_ranges; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE project_ranges (
-    id integer,
-    range tstzrange,
-    state character varying(255)
-);
-
-
---
--- Name: slips_to_update_fee; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE slips_to_update_fee (
-    date timestamp without time zone,
-    gateway_id integer,
-    fee numeric
-);
-
-
---
--- Name: sorbonne; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE sorbonne (
-    user_id integer,
-    login text,
-    name text,
-    wave integer DEFAULT 1 NOT NULL,
-    row_number integer
-);
-
-
---
--- Name: sorbonne_reinvite; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE sorbonne_reinvite (
-    user_id integer,
-    login text,
-    name text,
-    wave integer
-);
-
-
---
--- Name: taxa_antiga_pagarme; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE taxa_antiga_pagarme (
-    contribution_id integer,
-    payment_id integer,
-    new_payment_service_fee numeric
-);
-
-
---
--- Name: temp_projects_to_get_some_info; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE temp_projects_to_get_some_info (
-    name text,
-    original_id integer
-);
-
-
---
--- Name: workshops; Type: TABLE; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE TABLE workshops (
-    id integer NOT NULL,
-    name text NOT NULL,
-    email text NOT NULL,
-    workshop text NOT NULL,
-    scheduled_at date NOT NULL
-);
-
-
---
--- Name: workshops_id_seq; Type: SEQUENCE; Schema: temp; Owner: -
---
-
-CREATE SEQUENCE workshops_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: workshops_id_seq; Type: SEQUENCE OWNED BY; Schema: temp; Owner: -
---
-
-ALTER SEQUENCE workshops_id_seq OWNED BY workshops.id;
-
-
-SET search_path = public, pg_catalog;
 
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
@@ -4985,6 +4443,13 @@ ALTER TABLE ONLY project_budgets ALTER COLUMN id SET DEFAULT nextval('project_bu
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
+ALTER TABLE ONLY project_errors ALTER COLUMN id SET DEFAULT nextval('project_errors_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
 ALTER TABLE ONLY project_notifications ALTER COLUMN id SET DEFAULT nextval('project_notifications_id_seq'::regclass);
 
 
@@ -5121,15 +4586,6 @@ ALTER TABLE ONLY user_transfers ALTER COLUMN id SET DEFAULT nextval('user_transf
 ALTER TABLE ONLY users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
 
 
-SET search_path = temp, pg_catalog;
-
---
--- Name: id; Type: DEFAULT; Schema: temp; Owner: -
---
-
-ALTER TABLE ONLY workshops ALTER COLUMN id SET DEFAULT nextval('workshops_id_seq'::regclass);
-
-
 SET search_path = api_updates, pg_catalog;
 
 --
@@ -5148,14 +4604,6 @@ SET search_path = public, pg_catalog;
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT authorizations_pkey PRIMARY KEY (id);
-
-
---
--- Name: backers_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY contributions
-    ADD CONSTRAINT backers_pkey PRIMARY KEY (id);
 
 
 --
@@ -5231,11 +4679,11 @@ ALTER TABLE ONLY channel_posts
 
 
 --
--- Name: channel_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+-- Name: channels_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
 ALTER TABLE ONLY channels
-    ADD CONSTRAINT channel_profiles_pkey PRIMARY KEY (id);
+    ADD CONSTRAINT channels_pkey PRIMARY KEY (id);
 
 
 --
@@ -5276,6 +4724,14 @@ ALTER TABLE ONLY settings
 
 ALTER TABLE ONLY contribution_notifications
     ADD CONSTRAINT contribution_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: contributions_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY contributions
+    ADD CONSTRAINT contributions_pkey PRIMARY KEY (id);
 
 
 --
@@ -5431,6 +4887,14 @@ ALTER TABLE ONLY project_budgets
 
 
 --
+-- Name: project_errors_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT project_errors_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: project_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -5543,6 +5007,14 @@ ALTER TABLE ONLY tags
 
 
 --
+-- Name: total_backed_ranges_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY total_backed_ranges
+    ADD CONSTRAINT total_backed_ranges_pkey PRIMARY KEY (name);
+
+
+--
 -- Name: unsubscribes_pkey; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -5598,48 +5070,7 @@ ALTER TABLE ONLY users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 
-SET search_path = temp, pg_catalog;
-
---
--- Name: moip_jan_2014_backers_key_key; Type: CONSTRAINT; Schema: temp; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY moip_jan_2014_backers
-    ADD CONSTRAINT moip_jan_2014_backers_key_key UNIQUE (key);
-
-
---
--- Name: paypal_dez_2013_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY paypal_dez_2013_backers
-    ADD CONSTRAINT paypal_dez_2013_backers_payment_id_key UNIQUE (payment_id);
-
-
---
--- Name: paypal_jan_2014_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY paypal_jan_2014_backers
-    ADD CONSTRAINT paypal_jan_2014_backers_payment_id_key UNIQUE (payment_id);
-
-
---
--- Name: workshops_pkey; Type: CONSTRAINT; Schema: temp; Owner: -; Tablespace: 
---
-
-ALTER TABLE ONLY workshops
-    ADD CONSTRAINT workshops_pkey PRIMARY KEY (id);
-
-
 SET search_path = "1", pg_catalog;
-
---
--- Name: statistics_total_users_idx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX statistics_total_users_idx ON statistics USING btree (total_users);
-
 
 --
 -- Name: user_totals_id_idx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
@@ -5669,27 +5100,6 @@ CREATE INDEX fk__authorizations_user_id ON authorizations USING btree (user_id);
 --
 
 CREATE INDEX fk__bank_accounts_bank_id ON bank_accounts USING btree (bank_id);
-
-
---
--- Name: fk__bank_accounts_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__bank_accounts_user_id ON bank_accounts USING btree (user_id);
-
-
---
--- Name: fk__category_followers_category_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__category_followers_category_id ON category_followers USING btree (category_id);
-
-
---
--- Name: fk__category_followers_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__category_followers_user_id ON category_followers USING btree (user_id);
 
 
 --
@@ -5725,20 +5135,6 @@ CREATE INDEX fk__channel_post_notifications_channel_post_id ON channel_post_noti
 --
 
 CREATE INDEX fk__channel_post_notifications_user_id ON channel_post_notifications USING btree (user_id);
-
-
---
--- Name: fk__channel_posts_channel_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__channel_posts_channel_id ON channel_posts USING btree (channel_id);
-
-
---
--- Name: fk__channel_posts_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__channel_posts_user_id ON channel_posts USING btree (user_id);
 
 
 --
@@ -5795,13 +5191,6 @@ CREATE INDEX fk__contributions_donation_id ON contributions USING btree (donatio
 --
 
 CREATE INDEX fk__contributions_origin_id ON contributions USING btree (origin_id);
-
-
---
--- Name: fk__credit_cards_user_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX fk__credit_cards_user_id ON credit_cards USING btree (user_id);
 
 
 --
@@ -5872,6 +5261,13 @@ CREATE INDEX fk__project_accounts_bank_id ON project_accounts USING btree (bank_
 --
 
 CREATE INDEX fk__project_budgets_project_id ON project_budgets USING btree (project_id);
+
+
+--
+-- Name: fk__project_errors_project_id; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+--
+
+CREATE INDEX fk__project_errors_project_id ON project_errors USING btree (project_id);
 
 
 --
@@ -6050,10 +5446,10 @@ CREATE UNIQUE INDEX index_banks_on_code ON banks USING btree (code);
 
 
 --
--- Name: index_categories_on_name; Type: INDEX; Schema: public; Owner: -; Tablespace: 
+-- Name: index_categories_on_name_pt; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
-CREATE INDEX index_categories_on_name ON categories USING btree (name_pt);
+CREATE INDEX index_categories_on_name_pt ON categories USING btree (name_pt);
 
 
 --
@@ -6351,20 +5747,6 @@ CREATE UNIQUE INDEX index_users_on_reset_password_token ON users USING btree (re
 
 
 --
--- Name: online_projects_id_ix; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX online_projects_id_ix ON projects USING btree (id) WHERE ((state)::text = 'online'::text);
-
-
---
--- Name: payments_created_at_idx; Type: INDEX; Schema: public; Owner: -; Tablespace: 
---
-
-CREATE INDEX payments_created_at_idx ON payments USING btree (created_at);
-
-
---
 -- Name: payments_full_text_index_ix; Type: INDEX; Schema: public; Owner: -; Tablespace: 
 --
 
@@ -6434,15 +5816,6 @@ CREATE INDEX users_full_text_index_ix ON users USING gin (full_text_index);
 CREATE UNIQUE INDEX users_id_idx ON users USING btree (id DESC);
 
 
-SET search_path = temp, pg_catalog;
-
---
--- Name: workshops_email_workshop_idx; Type: INDEX; Schema: temp; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX workshops_email_workshop_idx ON workshops USING btree (email, workshop);
-
-
 SET search_path = "1", pg_catalog;
 
 --
@@ -6461,61 +5834,6 @@ CREATE RULE "_RETURN" AS
      JOIN public.payments p ON ((p.contribution_id = c.id)))
   WHERE (p.state = ANY (public.confirmed_states()))
   GROUP BY c.project_id, projects.id;
-
-
---
--- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
---
-
-CREATE RULE "_RETURN" AS
-    ON SELECT TO category_totals DO INSTEAD  WITH project_stats AS (
-         SELECT ca.id AS category_id,
-            ca.name_pt AS name,
-            count(DISTINCT p_1.id) FILTER (WHERE ((p_1.state)::text = 'online'::text)) AS online_projects,
-            count(DISTINCT p_1.id) FILTER (WHERE ((p_1.state)::text = 'successful'::text)) AS successful_projects,
-            count(DISTINCT p_1.id) FILTER (WHERE ((p_1.state)::text = 'failed'::text)) AS failed_projects,
-            avg(p_1.goal) AS avg_goal,
-            avg(pt.pledged) AS avg_pledged,
-            sum(pt.pledged) FILTER (WHERE ((p_1.state)::text = 'successful'::text)) AS total_successful_value,
-            sum(pt.pledged) AS total_value
-           FROM ((public.projects p_1
-             JOIN public.categories ca ON ((ca.id = p_1.category_id)))
-             LEFT JOIN project_totals pt ON ((pt.project_id = p_1.id)))
-          WHERE ((p_1.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('in_analysis'::character varying)::text, ('rejected'::character varying)::text]))
-          GROUP BY ca.id
-        ), contribution_stats AS (
-         SELECT ca.id AS category_id,
-            ca.name_pt,
-            avg(pa.value) AS avg_value,
-            count(DISTINCT c_1.user_id) AS total_contributors
-           FROM (((public.projects p_1
-             JOIN public.categories ca ON ((ca.id = p_1.category_id)))
-             JOIN public.contributions c_1 ON ((c_1.project_id = p_1.id)))
-             JOIN public.payments pa ON ((pa.contribution_id = c_1.id)))
-          WHERE (((p_1.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('in_analysis'::character varying)::text, ('rejected'::character varying)::text])) AND (pa.state = ANY (public.confirmed_states())))
-          GROUP BY ca.id
-        ), followers AS (
-         SELECT cf_1.category_id,
-            count(DISTINCT cf_1.user_id) AS followers
-           FROM public.category_followers cf_1
-          GROUP BY cf_1.category_id
-        )
- SELECT p.category_id,
-    p.name,
-    p.online_projects,
-    p.successful_projects,
-    p.failed_projects,
-    p.avg_goal,
-    p.avg_pledged,
-    p.total_successful_value,
-    p.total_value,
-    c.name_pt,
-    c.avg_value,
-    c.total_contributors,
-    cf.followers
-   FROM ((project_stats p
-     JOIN contribution_stats c USING (category_id))
-     LEFT JOIN followers cf USING (category_id));
 
 
 --
@@ -6573,9 +5891,9 @@ CREATE RULE "_RETURN" AS
     public.state_order(p.*) AS state_order,
     p.expires_at,
     public.zone_timestamp(p.expires_at) AS zone_expires_at,
-    p.online_date,
-    public.zone_timestamp(p.online_date) AS zone_online_date,
-    p.sent_to_analysis_at,
+    public.online_at(p.*) AS online_date,
+    public.zone_timestamp(public.online_at(p.*)) AS zone_online_date,
+    public.zone_timestamp(public.in_analysis_at(p.*)) AS sent_to_analysis_at,
     public.is_published(p.*) AS is_published,
     public.is_expired(p.*) AS is_expired,
     public.open_for_contributions(p.*) AS open_for_contributions,
@@ -6602,7 +5920,7 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.cities ct ON ((ct.id = p.city_id)))
      LEFT JOIN public.states st ON ((st.id = ct.state_id)))
      LEFT JOIN public.project_reminders pr ON ((pr.project_id = p.id)))
-  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
+  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
 
 
 --
@@ -7024,6 +6342,14 @@ ALTER TABLE ONLY project_budgets
 
 
 --
+-- Name: fk_project_errors_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT fk_project_errors_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
 -- Name: fk_project_notifications_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7274,7 +6600,6 @@ GRANT USAGE ON SCHEMA "1" TO anonymous;
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA public FROM catarse;
 GRANT ALL ON SCHEMA public TO catarse;
-GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
 
 
@@ -7339,16 +6664,6 @@ GRANT SELECT ON TABLE projects TO admin;
 SET search_path = public, pg_catalog;
 
 --
--- Name: payments; Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON TABLE payments FROM PUBLIC;
-REVOKE ALL ON TABLE payments FROM catarse;
-GRANT ALL ON TABLE payments TO catarse;
-GRANT SELECT ON TABLE payments TO admin;
-
-
---
 -- Name: project_reminders; Type: ACL; Schema: public; Owner: -
 --
 
@@ -7357,6 +6672,16 @@ REVOKE ALL ON TABLE project_reminders FROM catarse;
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
+
+
+--
+-- Name: payments; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE payments FROM PUBLIC;
+REVOKE ALL ON TABLE payments FROM catarse;
+GRANT ALL ON TABLE payments TO catarse;
+GRANT SELECT ON TABLE payments TO admin;
 
 
 SET search_path = "1", pg_catalog;
@@ -7397,17 +6722,6 @@ REVOKE ALL ON TABLE category_followers FROM catarse;
 GRANT ALL ON TABLE category_followers TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
-
-
---
--- Name: category_totals; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-REVOKE ALL ON TABLE category_totals FROM catarse;
-GRANT ALL ON TABLE category_totals TO catarse;
-GRANT SELECT ON TABLE category_totals TO admin;
-GRANT ALL ON TABLE category_totals TO catarse;
 
 
 --
@@ -7463,17 +6777,6 @@ REVOKE ALL ON TABLE contributions FROM PUBLIC;
 REVOKE ALL ON TABLE contributions FROM catarse;
 GRANT ALL ON TABLE contributions TO catarse;
 GRANT ALL ON TABLE contributions TO admin;
-
-
---
--- Name: financial_reports; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE financial_reports FROM PUBLIC;
-REVOKE ALL ON TABLE financial_reports FROM catarse;
-GRANT ALL ON TABLE financial_reports TO catarse;
-GRANT SELECT ON TABLE financial_reports TO admin;
-GRANT SELECT ON TABLE financial_reports TO web_user;
 
 
 SET search_path = public, pg_catalog;
@@ -7547,7 +6850,6 @@ GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
-GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 
 
 --
@@ -7560,7 +6862,6 @@ GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
-GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 
 
 --
@@ -7573,18 +6874,6 @@ GRANT ALL ON TABLE project_details TO catarse;
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
-
-
---
--- Name: project_financials; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE project_financials FROM PUBLIC;
-REVOKE ALL ON TABLE project_financials FROM catarse;
-GRANT ALL ON TABLE project_financials TO catarse;
-GRANT SELECT ON TABLE project_financials TO web_user;
-GRANT SELECT ON TABLE project_financials TO admin;
-GRANT ALL ON TABLE project_financials TO catarse;
 
 
 --
@@ -7628,6 +6917,8 @@ REVOKE ALL ON TABLE project_transitions FROM PUBLIC;
 REVOKE ALL ON TABLE project_transitions FROM catarse;
 GRANT ALL ON TABLE project_transitions TO catarse;
 GRANT SELECT ON TABLE project_transitions TO admin;
+GRANT SELECT ON TABLE project_transitions TO web_user;
+GRANT SELECT ON TABLE project_transitions TO anonymous;
 
 
 --
@@ -7639,16 +6930,6 @@ REVOKE ALL ON TABLE recommendations FROM catarse;
 GRANT ALL ON TABLE recommendations TO catarse;
 GRANT SELECT ON TABLE recommendations TO admin;
 GRANT SELECT ON TABLE recommendations TO web_user;
-
-
---
--- Name: referral_totals; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE referral_totals FROM PUBLIC;
-REVOKE ALL ON TABLE referral_totals FROM catarse;
-GRANT ALL ON TABLE referral_totals TO catarse;
-GRANT SELECT ON TABLE referral_totals TO admin;
 
 
 --
@@ -7739,17 +7020,6 @@ REVOKE ALL(deactivated_at) ON TABLE users FROM catarse;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
 
 
---
--- Name: year_totals; Type: ACL; Schema: 1; Owner: -
---
-
-REVOKE ALL ON TABLE year_totals FROM PUBLIC;
-REVOKE ALL ON TABLE year_totals FROM catarse;
-GRANT ALL ON TABLE year_totals TO catarse;
-GRANT SELECT ON TABLE year_totals TO admin;
-GRANT SELECT ON TABLE year_totals TO web_user;
-
-
 SET search_path = public, pg_catalog;
 
 --
@@ -7776,25 +7046,12 @@ GRANT SELECT ON TABLE flexible_project_states TO anonymous;
 
 
 --
--- Name: payment_logs; Type: ACL; Schema: public; Owner: -
+-- Name: project_financials; Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON TABLE payment_logs FROM PUBLIC;
-REVOKE ALL ON TABLE payment_logs FROM catarse;
-GRANT ALL ON TABLE payment_logs TO catarse;
-GRANT SELECT ON TABLE payment_logs TO admin;
-GRANT SELECT ON TABLE payment_logs TO web_user;
-
-
---
--- Name: payment_transfers; Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON TABLE payment_transfers FROM PUBLIC;
-REVOKE ALL ON TABLE payment_transfers FROM catarse;
-GRANT ALL ON TABLE payment_transfers TO catarse;
-GRANT SELECT ON TABLE payment_transfers TO admin;
-GRANT SELECT ON TABLE payment_transfers TO web_user;
+REVOKE ALL ON TABLE project_financials FROM PUBLIC;
+REVOKE ALL ON TABLE project_financials FROM catarse;
+GRANT ALL ON TABLE project_financials TO catarse;
 
 
 --
