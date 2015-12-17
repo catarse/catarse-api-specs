@@ -1,0 +1,25 @@
+---
+- config:
+  - testset: "balance_transactions"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/balances_transactions"
+  - expected_status: [404]
+
+- test:
+  - name: "Basic get is available for web_user and should return the argg data about transactions"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - url: "/balance_transactions"
+  - validators:
+    - compare: {jsonpath_mini: '0.user_id', comparator: 'eq', expected: 1}
+    - compare: {jsonpath_mini: '0.debit', comparator: 'eq', expected: -13}
+    - compare: {jsonpath_mini: '0.credit', comparator: 'eq', expected: 100}
+    - compare: {jsonpath_mini: '0.total_amount', comparator: 'eq', expected: 87}
+
+- test:
+  - name: "Basic get is available only for web users when see they balance_transactions only"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJpZCI6IjEifQ.BHB2mLvjPyUxvGQjpkC_rV3r4BZAM6UtPajVtapX9rg'}
+  - url: "/balance_transactions?user_id=eq.2"
+  - validators:
+    - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
