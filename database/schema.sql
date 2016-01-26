@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 9.5beta1
--- Dumped by pg_dump version 9.5beta1
+-- Dumped from database version 9.5.0
+-- Dumped by pg_dump version 9.5.0
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -11,112 +11,155 @@ SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SET check_function_bodies = false;
 SET client_min_messages = warning;
+SET row_security = off;
 
 --
 -- Name: 1; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA "1";
+
+
 --
 -- Name: api_updates; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA api_updates;
+
+
 --
 -- Name: financial; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA financial;
+
+
 --
 -- Name: temp; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA temp;
+
+
 --
 -- Name: time; Type: SCHEMA; Schema: -; Owner: -
 --
 
 CREATE SCHEMA "time";
+
+
 --
 -- Name: plpgsql; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
+
+
 --
 -- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
+
+
 --
 -- Name: plv8; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS plv8 WITH SCHEMA pg_catalog;
+
+
 --
 -- Name: EXTENSION plv8; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION plv8 IS 'PL/JavaScript (v8) trusted procedural language';
+
+
 --
 -- Name: pg_stat_statements; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION pg_stat_statements; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pg_stat_statements IS 'track execution statistics of all SQL statements executed';
+
+
 --
 -- Name: pg_trgm; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
+
+
 --
 -- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
+
+
 --
 -- Name: tablefunc; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS tablefunc WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION tablefunc; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION tablefunc IS 'functions that manipulate whole tables, including crosstab';
+
+
 --
 -- Name: unaccent; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION unaccent; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION unaccent IS 'text search dictionary that removes accents';
+
+
 --
 -- Name: uuid-ossp; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
+
+
 --
 -- Name: EXTENSION "uuid-ossp"; Type: COMMENT; Schema: -; Owner: -
 --
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -131,6 +174,8 @@ CREATE TYPE project_state_order AS ENUM (
     'published',
     'finished'
 );
+
+
 --
 -- Name: is_current_and_online(timestamp without time zone, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -140,6 +185,8 @@ CREATE FUNCTION is_current_and_online(expires_at timestamp without time zone, st
     AS $$
     SELECT (not public.is_past(expires_at) AND state = 'online');
 $$;
+
+
 SET default_tablespace = '';
 
 SET default_with_oids = false;
@@ -166,19 +213,14 @@ CREATE TABLE projects (
     video_thumbnail text,
     state character varying(255) DEFAULT 'draft'::character varying NOT NULL,
     online_days integer,
-    online_date timestamp without time zone,
     more_links text,
     first_contributions text,
     uploaded_image character varying(255),
     video_embed_url character varying(255),
-    referral_link text,
-    sent_to_analysis_at timestamp without time zone,
     audited_user_name text,
     audited_user_cpf text,
     audited_user_moip_login text,
     audited_user_phone_number text,
-    sent_to_draft_at timestamp without time zone,
-    rejected_at timestamp without time zone,
     traffic_sources text,
     budget text,
     full_text_index tsvector,
@@ -189,6 +231,8 @@ CREATE TABLE projects (
     service_fee numeric DEFAULT 0.13,
     CONSTRAINT permalinkck CHECK ((permalink ~* '\A(\w|-)+\Z'::text))
 );
+
+
 --
 -- Name: mode(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -203,6 +247,19 @@ CREATE FUNCTION mode(project projects) RETURNS text
             'aon'
           END;
       $$;
+
+
+--
+-- Name: online_at(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION online_at(project projects) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $$
+        SELECT get_date_from_project_transitions(project.id, 'online');
+    $$;
+
+
 --
 -- Name: remaining_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -212,6 +269,8 @@ CREATE FUNCTION remaining_time_json(projects) RETURNS json
     AS $_$
             select public.interval_to_json($1.remaining_time_interval)
         $_$;
+
+
 --
 -- Name: state_order(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -221,6 +280,8 @@ CREATE FUNCTION state_order(project projects) RETURNS project_state_order
     AS $_$
 SELECT public.state_order($1.id);
 $_$;
+
+
 --
 -- Name: thumbnail_image(projects, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -234,6 +295,19 @@ CREATE FUNCTION thumbnail_image(projects, size text) RETURNS text
                   '/uploads/project/uploaded_image/' || $1.id::text ||
                   '/project_thumb_' || size || '_' || $1.uploaded_image
             $_$;
+
+
+--
+-- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE SECURITY DEFINER
+    AS $_$
+        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
+      $_$;
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -250,6 +324,8 @@ CREATE TABLE project_totals (
 );
 
 ALTER TABLE ONLY project_totals REPLICA IDENTITY NOTHING;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -261,6 +337,8 @@ CREATE TABLE cities (
     name text NOT NULL,
     state_id integer NOT NULL
 );
+
+
 --
 -- Name: flexible_projects; Type: TABLE; Schema: public; Owner: -
 --
@@ -272,35 +350,8 @@ CREATE TABLE flexible_projects (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
---
--- Name: project_accounts; Type: TABLE; Schema: public; Owner: -
---
 
-CREATE TABLE project_accounts (
-    id integer NOT NULL,
-    project_id integer NOT NULL,
-    bank_id integer,
-    email text NOT NULL,
-    state_inscription text,
-    address_street text NOT NULL,
-    address_number text NOT NULL,
-    address_complement text,
-    address_city text NOT NULL,
-    address_neighbourhood text NOT NULL,
-    address_state text NOT NULL,
-    address_zip_code text NOT NULL,
-    phone_number text NOT NULL,
-    agency text NOT NULL,
-    agency_digit text NOT NULL,
-    account text NOT NULL,
-    account_digit text NOT NULL,
-    owner_name text NOT NULL,
-    owner_document text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone,
-    account_type text,
-    CONSTRAINT project_accounts_agency_check CHECK ((length(agency) >= 4))
-);
+
 --
 -- Name: states; Type: TABLE; Schema: public; Owner: -
 --
@@ -314,6 +365,8 @@ CREATE TABLE states (
     CONSTRAINT states_acronym_not_blank CHECK ((length(btrim((acronym)::text)) > 0)),
     CONSTRAINT states_name_not_blank CHECK ((length(btrim((name)::text)) > 0))
 );
+
+
 --
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
@@ -364,6 +417,8 @@ CREATE TABLE users (
     subscribed_to_project_posts boolean DEFAULT true,
     full_text_index tsvector NOT NULL
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -378,8 +433,8 @@ CREATE VIEW projects AS
     p.permalink,
     public.mode(p.*) AS mode,
     COALESCE(fp.state, (p.state)::text) AS state,
-    public.state_order(p.*) AS state_order,
-    p.online_date,
+    so.so AS state_order,
+    od.od AS online_date,
     p.recommended,
     public.thumbnail_image(p.*, 'large'::text) AS project_img,
     public.remaining_time_json(p.*) AS remaining_time,
@@ -390,17 +445,20 @@ CREATE VIEW projects AS
     COALESCE(( SELECT pt.progress
            FROM project_totals pt
           WHERE (pt.project_id = p.id)), (0)::numeric) AS progress,
-    COALESCE(s.acronym, (pa.address_state)::character varying(255)) AS state_acronym,
+    s.acronym AS state_acronym,
     u.name AS owner_name,
-    COALESCE(c.name, pa.address_city) AS city_name,
+    c.name AS city_name,
     p.full_text_index,
     public.is_current_and_online(p.expires_at, COALESCE(fp.state, (p.state)::text)) AS open_for_contributions
-   FROM (((((public.projects p
+   FROM ((((((public.projects p
      JOIN public.users u ON ((p.user_id = u.id)))
-     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
-     LEFT JOIN public.project_accounts pa ON ((pa.project_id = p.id)))
-     LEFT JOIN public.cities c ON ((c.id = p.city_id)))
-     LEFT JOIN public.states s ON ((s.id = c.state_id)));
+     JOIN public.cities c ON ((c.id = p.city_id)))
+     JOIN public.states s ON ((s.id = c.state_id)))
+     JOIN LATERAL public.zone_timestamp(public.online_at(p.*)) od(od) ON (true))
+     JOIN LATERAL public.state_order(p.*) so(so) ON (true))
+     LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)));
+
+
 --
 -- Name: project_search(text); Type: FUNCTION; Schema: 1; Owner: -
 --
@@ -414,7 +472,7 @@ FROM
     "1".projects p
 WHERE
     (
-        p.full_text_index @@ to_tsquery('portuguese', unaccent(query))
+        p.full_text_index @@ plainto_tsquery('portuguese', unaccent(query))
         OR
         p.project_name % query
     )
@@ -422,9 +480,11 @@ WHERE
 ORDER BY
     p.open_for_contributions DESC,
     p.state_order,
-    ts_rank(p.full_text_index, to_tsquery('portuguese', unaccent(query))) DESC,
+    ts_rank(p.full_text_index, plainto_tsquery('portuguese', unaccent(query))) DESC,
     p.project_id DESC;
 $$;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -443,6 +503,8 @@ CREATE FUNCTION _final_median(numeric[]) RETURNS numeric
      OFFSET CEIL(array_upper($1, 1) / 2.0) - 1
    ) sub;
 $_$;
+
+
 --
 -- Name: approved_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -452,6 +514,8 @@ CREATE FUNCTION approved_at(project projects) RETURNS timestamp without time zon
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'approved');
     $$;
+
+
 --
 -- Name: assert_not_null(anyelement, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -466,20 +530,8 @@ BEGIN
   RETURN;
 END;
 $_$;
---
--- Name: campaign_mode(projects); Type: FUNCTION; Schema: public; Owner: -
---
 
-CREATE FUNCTION campaign_mode(project projects) RETURNS text
-    LANGUAGE sql
-    AS $$
-        SELECT
-          CASE WHEN EXISTS ( SELECT 1 FROM flexible_projects WHERE project_id = project.id ) THEN
-            'flex'
-          ELSE
-            'aon'
-          END;
-      $$;
+
 --
 -- Name: payments; Type: TABLE; Schema: public; Owner: -
 --
@@ -507,6 +559,8 @@ CREATE TABLE payments (
     deleted_at timestamp without time zone,
     chargeback_at timestamp without time zone
 );
+
+
 --
 -- Name: can_delete(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -523,6 +577,8 @@ CREATE FUNCTION can_delete(payments) RETURNS boolean
                  WHERE extract(dow from day) not in (0,1)
                )  >= 4
      $_$;
+
+
 --
 -- Name: project_reminders; Type: TABLE; Schema: public; Owner: -
 --
@@ -534,6 +590,8 @@ CREATE TABLE project_reminders (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: can_deliver(project_reminders); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -552,6 +610,8 @@ and not exists (select true from project_notifications pn
 where pn.user_id = $1.user_id and pn.project_id = $1.project_id
 and pn.template_name = 'reminder'));
 $_$;
+
+
 --
 -- Name: contributions; Type: TABLE; Schema: public; Owner: -
 --
@@ -579,12 +639,15 @@ CREATE TABLE contributions (
     address_phone_number text,
     payment_choice text,
     payment_service_fee numeric,
+    referral_link text,
     deleted_at timestamp without time zone,
     country_id integer,
     donation_id integer,
     origin_id integer,
     CONSTRAINT backers_value_positive CHECK ((value >= (0)::numeric))
 );
+
+
 --
 -- Name: can_refund(contributions); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -600,6 +663,8 @@ CREATE FUNCTION can_refund(contributions) RETURNS boolean
           WHERE p.id = $1.project_id and p.state = 'failed'
         )
     $_$;
+
+
 --
 -- Name: confirmed_states(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -609,6 +674,8 @@ CREATE FUNCTION confirmed_states() RETURNS text[]
     AS $$
       SELECT '{"paid", "pending_refund", "refunded"}'::text[];
     $$;
+
+
 --
 -- Name: current_user_already_in_reminder(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -618,6 +685,8 @@ CREATE FUNCTION current_user_already_in_reminder(projects) RETURNS boolean
     AS $_$
         select public.user_has_reminder_for_project(current_user_id(), $1.id);
       $_$;
+
+
 --
 -- Name: current_user_has_contributed_to_project(integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -627,6 +696,8 @@ CREATE FUNCTION current_user_has_contributed_to_project(integer) RETURNS boolean
     AS $_$
         select public.user_has_contributed_to_project(current_user_id(), $1);
       $_$;
+
+
 --
 -- Name: current_user_id(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -634,8 +705,10 @@ CREATE FUNCTION current_user_has_contributed_to_project(integer) RETURNS boolean
 CREATE FUNCTION current_user_id() RETURNS integer
     LANGUAGE sql
     AS $$
-        SELECT nullif(current_setting('user_vars.user_id'), '')::integer;
-      $$;
+        SELECT nullif(current_setting('postgrest.claims.user_id'), '')::integer;
+    $$;
+
+
 --
 -- Name: delete_category_followers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -651,6 +724,8 @@ CREATE FUNCTION delete_category_followers() RETURNS trigger
           return old;
         end;
       $$;
+
+
 --
 -- Name: delete_project_reminder(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -667,6 +742,8 @@ CREATE FUNCTION delete_project_reminder() RETURNS trigger
           return old;
         end;
       $$;
+
+
 --
 -- Name: deleted_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -676,6 +753,8 @@ CREATE FUNCTION deleted_at(project projects) RETURNS timestamp without time zone
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'deleted');
     $$;
+
+
 --
 -- Name: deps_restore_dependencies(character varying, character varying); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -699,6 +778,8 @@ CREATE FUNCTION deps_restore_dependencies(p_view_schema character varying, p_vie
       where deps_view_schema = p_view_schema and deps_view_name = p_view_name;
       end;
       $$;
+
+
 --
 -- Name: deps_save_and_drop_dependencies(character varying, character varying); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -791,6 +872,8 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
       end loop;
       end;
       $$;
+
+
 --
 -- Name: elapsed_time_json(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -798,8 +881,10 @@ CREATE FUNCTION deps_save_and_drop_dependencies(p_view_schema character varying,
 CREATE FUNCTION elapsed_time_json(projects) RETURNS json
     LANGUAGE sql STABLE SECURITY DEFINER
     AS $_$
-            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_date)
+            select public.interval_to_json(least(now(), $1.expires_at) - $1.online_at)
         $_$;
+
+
 --
 -- Name: failed_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -809,6 +894,37 @@ CREATE FUNCTION failed_at(project projects) RETURNS timestamp without time zone
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'failed');
     $$;
+
+
+--
+-- Name: flexible_project_rdevents_dispatcher(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION flexible_project_rdevents_dispatcher() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            v_user_id integer;
+            v_project_id integer;
+            v_enabled_events text[];
+        BEGIN
+            v_enabled_events =  ARRAY['online',  'waiting_funds', 'successful'];
+
+            SELECT project_id FROM flexible_projects WHERE id = NEW.flexible_project_id
+                INTO v_project_id;
+            SELECT user_id FROM projects WHERE id = v_project_id
+                INTO v_user_id;
+
+            IF NEW.to_state = ANY(v_enabled_events) THEN
+                INSERT INTO public.rdevents (user_id, project_id, event_name)
+                    VALUES (v_user_id, v_project_id, 'flex_project_'||NEW.to_state);
+            END IF;
+
+            RETURN NULL;
+        END;
+    $$;
+
+
 --
 -- Name: get_date_from_project_transitions(integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -821,6 +937,8 @@ CREATE FUNCTION get_date_from_project_transitions(project_id integer, state text
         WHERE state = $2
         AND project_id = $1
     $_$;
+
+
 --
 -- Name: has_published_projects(users); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -830,6 +948,8 @@ CREATE FUNCTION has_published_projects(users) RETURNS boolean
     AS $_$
         select true from public.projects p where p.is_published and p.user_id = $1.id
       $_$;
+
+
 --
 -- Name: in_analysis_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -839,6 +959,47 @@ CREATE FUNCTION in_analysis_at(project projects) RETURNS timestamp without time 
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'in_analysis');
     $$;
+
+
+--
+-- Name: insert_balance_transfer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION insert_balance_transfer() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            v_balance "1".balances;
+            v_balance_transfer_id integer;
+            v_balance_transfer "1".balance_transfers;
+        BEGIN
+            IF NOT public.is_owner_or_admin(NEW.user_id) THEN
+                RAISE EXCEPTION 'insufficient privileges to insert balance_transactions';
+            END IF;
+
+            SELECT * FROM "1".balances 
+                WHERE user_id = NEW.user_id
+                INTO v_balance;
+
+            IF COALESCE(v_balance.amount, 0) <= 0 THEN
+                RAISE EXCEPTION 'insufficient funds';
+            END IF;
+
+            INSERT INTO public.balance_transfers (user_id, amount, created_at)
+                VALUES (NEW.user_id, v_balance.amount, now())
+                RETURNING id INTO v_balance_transfer_id;
+
+            INSERT INTO public.balance_transactions (user_id, event_name, balance_transfer_id, created_at, amount)
+                VALUES (NEW.user_id, 'balance_transfer_request', v_balance_transfer_id, now(), (v_balance.amount * -1));
+
+            SELECT * FROM "1".balance_transfers WHERE id = v_balance_transfer_id
+                INTO v_balance_transfer;
+
+            RETURN v_balance_transfer;
+        END;
+    $$;
+
+
 --
 -- Name: insert_category_followers(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -868,6 +1029,8 @@ CREATE FUNCTION insert_category_followers() RETURNS trigger
           return new;
         end;
       $$;
+
+
 --
 -- Name: insert_project_reminder(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -896,6 +1059,8 @@ CREATE FUNCTION insert_project_reminder() RETURNS trigger
           return new;
         end;
       $$;
+
+
 --
 -- Name: interval_to_json(interval); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -921,6 +1086,8 @@ CREATE FUNCTION interval_to_json(interval) RETURNS json
               end
             )
         $_$;
+
+
 --
 -- Name: irrf_tax(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -938,6 +1105,8 @@ CREATE FUNCTION irrf_tax(project projects) RETURNS numeric
             ON pa.project_id = p.id
         WHERE p.id = project.id;
     $$;
+
+
 --
 -- Name: is_confirmed(contributions); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -952,6 +1121,8 @@ CREATE FUNCTION is_confirmed(contributions) RETURNS boolean
         WHERE p.contribution_id = $1.id AND p.state = 'paid'
       );
     $_$;
+
+
 --
 -- Name: is_expired("1".projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -961,6 +1132,8 @@ CREATE FUNCTION is_expired(project "1".projects) RETURNS boolean
     AS $_$
     SELECT public.is_past($1.expires_at);
 $_$;
+
+
 --
 -- Name: is_expired(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -970,6 +1143,8 @@ CREATE FUNCTION is_expired(project projects) RETURNS boolean
     AS $_$
     SELECT public.is_past($1.expires_at);
 $_$;
+
+
 --
 -- Name: is_owner_or_admin(integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -981,6 +1156,8 @@ CREATE FUNCTION is_owner_or_admin(integer) RETURNS boolean
                 current_user_id() = $1
                 OR current_user = 'admin';
             $_$;
+
+
 --
 -- Name: is_past(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -990,6 +1167,8 @@ CREATE FUNCTION is_past(expires_at timestamp without time zone) RETURNS boolean
     AS $$
     SELECT COALESCE(current_timestamp > expires_at, false);
 $$;
+
+
 --
 -- Name: is_published(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -999,6 +1178,8 @@ CREATE FUNCTION is_published(projects) RETURNS boolean
     AS $_$
           select $1.state_order >= 'published'::project_state_order;
         $_$;
+
+
 --
 -- Name: is_second_slip(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1011,6 +1192,8 @@ CREATE FUNCTION is_second_slip(payments) RETURNS boolean
                and p.id < $1.id
                and lower(p.payment_method) = 'boletobancario')
         $_$;
+
+
 --
 -- Name: near_me("1".projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1021,6 +1204,8 @@ CREATE FUNCTION near_me("1".projects) RETURNS boolean
     SELECT
       COALESCE($1.state_acronym, (SELECT pa.address_state FROM project_accounts pa WHERE pa.project_id = $1.project_id)) = (SELECT u.address_state FROM users u WHERE u.id = current_user_id());
 $_$;
+
+
 --
 -- Name: notify_about_confirmed_payments(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1049,6 +1234,8 @@ CREATE FUNCTION notify_about_confirmed_payments() RETURNS trigger
           return null;
         end;
       $$;
+
+
 --
 -- Name: open_for_contributions(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1058,6 +1245,8 @@ CREATE FUNCTION open_for_contributions(projects) RETURNS boolean
     AS $_$
     SELECT public.is_current_and_online($1.expires_at, COALESCE((SELECT fp.state FROM flexible_projects fp WHERE fp.project_id = $1.id), $1.state));
 $_$;
+
+
 --
 -- Name: original_image(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1071,6 +1260,8 @@ CREATE FUNCTION original_image(projects) RETURNS text
             '/uploads/project/uploaded_image/' || $1.id::text ||
              '/' || $1.uploaded_image
       $_$;
+
+
 --
 -- Name: rewards; Type: TABLE; Schema: public; Owner: -
 --
@@ -1089,6 +1280,8 @@ CREATE TABLE rewards (
     CONSTRAINT rewards_maximum_backers_positive CHECK ((maximum_contributions >= 0)),
     CONSTRAINT rewards_minimum_value_positive CHECK ((minimum_value >= (0)::numeric))
 );
+
+
 --
 -- Name: paid_count(rewards); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1100,6 +1293,8 @@ CREATE FUNCTION paid_count(rewards) RETURNS bigint
       FROM payments p join contributions c on c.id = p.contribution_id 
       WHERE p.state = 'paid' AND c.reward_id = $1.id
     $_$;
+
+
 --
 -- Name: pcc_tax(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1117,6 +1312,8 @@ CREATE FUNCTION pcc_tax(project projects) RETURNS numeric
             ON pa.project_id = p.id
         WHERE p.id = project.id;
     $$;
+
+
 --
 -- Name: percentage_funded(integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1132,6 +1329,88 @@ CREATE FUNCTION percentage_funded(project_id integer, days_before_expires intege
 		c.project_id = $1
 		AND ((SELECT p.expires_at FROM projects p WHERE p.id = $1)::date - c.paid_at::date) >= $2;
 $_$;
+
+
+--
+-- Name: project_rdevents_dispatcher(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION project_rdevents_dispatcher() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            v_user_id integer;
+            v_enabled_events text[];
+        BEGIN
+            v_enabled_events =  ARRAY['in_analysis', 'approved', 'online',  'waiting_funds', 'successful', 'failed'];
+
+            SELECT user_id FROM projects WHERE id = NEW.project_id
+                INTO v_user_id;
+
+            IF NEW.to_state = ANY(v_enabled_events) THEN
+                INSERT INTO public.rdevents (user_id, project_id, event_name)
+                    VALUES (v_user_id, NEW.project_id, 'project_'||NEW.to_state);
+            END IF;
+
+            RETURN NULL;
+        END;
+    $$;
+
+
+--
+-- Name: project_received_conversion(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION project_received_conversion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            INSERT INTO public.rdevents (user_id, project_id, event_name)
+                VALUES (NEW.user_id, NEW.id, 'project_draft');
+            RETURN NULL;
+        END;
+    $$;
+
+
+--
+-- Name: rdevents_notify(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION rdevents_notify() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        DECLARE
+            v_user public.users;
+            v_project public.projects;
+        BEGIN
+            SELECT * FROM public.users WHERE id = NEW.user_id
+                INTO v_user;
+
+            SELECT * FROM public.projects WHERE id = NEW.project_id
+                INTO v_project;
+
+            PERFORM pg_notify('catartico_rdstation', json_build_object(
+                'event_name', NEW.event_name,
+                'email', v_user.email,
+                'name', v_user.name
+            )::text);
+
+            RETURN NULL;
+        END;
+    $$;
+
+
+--
+-- Name: rejected_at(projects); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION rejected_at(project projects) RETURNS timestamp without time zone
+    LANGUAGE sql STABLE
+    AS $$
+        SELECT get_date_from_project_transitions(project.id, 'rejected');
+    $$;
+
+
 --
 -- Name: remaining_time_interval(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1141,6 +1420,8 @@ CREATE FUNCTION remaining_time_interval(projects) RETURNS interval
     AS $_$
             select ($1.expires_at - current_timestamp)::interval
           $_$;
+
+
 --
 -- Name: sent_validation(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1162,6 +1443,8 @@ BEGIN
   RETURN null;
 END;
 $_$;
+
+
 --
 -- Name: settings(text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1171,6 +1454,8 @@ CREATE FUNCTION settings(name text) RETURNS text
     AS $_$
         SELECT value FROM settings WHERE name = $1;
       $_$;
+
+
 --
 -- Name: slip_expiration_weekdays(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1180,6 +1465,8 @@ CREATE FUNCTION slip_expiration_weekdays() RETURNS integer
     AS $$
     SELECT 2;
     $$;
+
+
 --
 -- Name: slip_expired(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1189,6 +1476,8 @@ CREATE FUNCTION slip_expired(payments) RETURNS boolean
     AS $_$
     SELECT $1.slip_expires_at < current_timestamp;
     $_$;
+
+
 --
 -- Name: slip_expires_at(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1198,6 +1487,8 @@ CREATE FUNCTION slip_expires_at(payments) RETURNS timestamp without time zone
     AS $_$
 SELECT weekdays_from(public.slip_expiration_weekdays(), $1.created_at);
     $_$;
+
+
 --
 -- Name: sold_out(rewards); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1207,6 +1498,8 @@ CREATE FUNCTION sold_out(reward rewards) RETURNS boolean
     AS $$
     SELECT reward.paid_count + reward.waiting_payment_count >= reward.maximum_contributions;
     $$;
+
+
 --
 -- Name: state_order(integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1237,6 +1530,8 @@ FROM projects p
 LEFT JOIN flexible_projects fp on fp.project_id = p.id
 WHERE p.id = $1;
 $_$;
+
+
 --
 -- Name: successful_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1246,6 +1541,8 @@ CREATE FUNCTION successful_at(project projects) RETURNS timestamp without time z
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'successful');
     $$;
+
+
 --
 -- Name: thumbnail_image(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1255,6 +1552,8 @@ CREATE FUNCTION thumbnail_image(projects) RETURNS text
     AS $_$
         SELECT public.thumbnail_image($1, 'small');
       $_$;
+
+
 --
 -- Name: thumbnail_image(users); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1268,6 +1567,8 @@ CREATE FUNCTION thumbnail_image(users) RETURNS text
               '/uploads/user/uploaded_image/' || $1.id::text ||
               '/thumb_avatar_' || $1.uploaded_image
             $_$;
+
+
 --
 -- Name: total_catarse_fee(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1282,6 +1583,8 @@ CREATE FUNCTION total_catarse_fee(project projects) RETURNS numeric
             ON pt.project_id = p.id
         WHERE p.id = project.id;
     $$;
+
+
 --
 -- Name: total_catarse_fee_without_gateway_fee(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1296,6 +1599,8 @@ CREATE FUNCTION total_catarse_fee_without_gateway_fee(project projects) RETURNS 
             ON pt.project_id = p.id
         WHERE p.id = project.id;
     $$;
+
+
 --
 -- Name: update_from_details_to_contributions(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1326,7 +1631,7 @@ CREATE FUNCTION update_from_details_to_contributions() RETURNS trigger
        WHERE id = old.contribution_id;
 
        -- we only allow deleted state in API
-       IF new.state <> ALL(allowed_states) THEN
+       IF new.state <> old.state AND new.state <> ALL(allowed_states) THEN
          RAISE EXCEPTION 'State can only be set to % using the API', allowed_states;
        END IF;
 
@@ -1338,7 +1643,9 @@ CREATE FUNCTION update_from_details_to_contributions() RETURNS trigger
        SELECT * FROM "1".contribution_details cd WHERE cd.id = old.id INTO new;
        RETURN new;
       END;
-    $$;
+      $$;
+
+
 --
 -- Name: update_full_text_index(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1354,6 +1661,8 @@ CREATE FUNCTION update_full_text_index() RETURNS trigger
       RETURN NEW;
     END;
     $$;
+
+
 --
 -- Name: update_payments_full_text_index(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1390,6 +1699,8 @@ CREATE FUNCTION update_payments_full_text_index() RETURNS trigger
        RETURN NEW;
      END;
     $$;
+
+
 --
 -- Name: update_user_from_user_details(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1404,6 +1715,8 @@ CREATE FUNCTION update_user_from_user_details() RETURNS trigger
         RETURN new;
       END;
     $$;
+
+
 --
 -- Name: update_users_full_text_index(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1418,6 +1731,8 @@ CREATE FUNCTION update_users_full_text_index() RETURNS trigger
           RETURN NEW;
         END;
       $$;
+
+
 --
 -- Name: user_has_contributed_to_project(integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1427,6 +1742,8 @@ CREATE FUNCTION user_has_contributed_to_project(user_id integer, project_id inte
     AS $_$
         select true from "1".contribution_details c where c.state = any(public.confirmed_states()) and c.project_id = $2 and c.user_id = $1;
       $_$;
+
+
 --
 -- Name: user_has_reminder_for_project(integer, integer); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1436,6 +1753,8 @@ CREATE FUNCTION user_has_reminder_for_project(user_id integer, project_id intege
     AS $_$
         select exists (select true from public.project_reminders pr where pr.user_id = $1 and pr.project_id = $2);
       $_$;
+
+
 --
 -- Name: user_signed_in(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1445,6 +1764,8 @@ CREATE FUNCTION user_signed_in() RETURNS boolean
     AS $$
         select current_user <> 'anonymous';
       $$;
+
+
 --
 -- Name: uses_credits(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1454,6 +1775,8 @@ CREATE FUNCTION uses_credits(payments) RETURNS boolean
     AS $_$
         SELECT $1.gateway = 'Credits';
       $_$;
+
+
 --
 -- Name: validate_project_expires_at(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1468,6 +1791,8 @@ CREATE FUNCTION validate_project_expires_at() RETURNS trigger
     RETURN new;
     END;
     $$;
+
+
 --
 -- Name: validate_reward_sold_out(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1482,6 +1807,8 @@ CREATE FUNCTION validate_reward_sold_out() RETURNS trigger
     RETURN new;
     END;
     $$;
+
+
 --
 -- Name: waiting_funds_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1491,6 +1818,8 @@ CREATE FUNCTION waiting_funds_at(project projects) RETURNS timestamp without tim
     AS $$
         SELECT get_date_from_project_transitions(project.id, 'waiting_funds');
     $$;
+
+
 --
 -- Name: waiting_payment(payments); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1507,6 +1836,8 @@ CREATE FUNCTION waiting_payment(payments) RETURNS boolean
                        WHERE extract(dow from day) not in (0,1)
                      )  <= 4
            $_$;
+
+
 --
 -- Name: waiting_payment_count(rewards); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1518,6 +1849,8 @@ CREATE FUNCTION waiting_payment_count(rewards) RETURNS bigint
       FROM payments p join contributions c on c.id = p.contribution_id 
       WHERE p.waiting_payment AND c.reward_id = $1.id
     $_$;
+
+
 --
 -- Name: was_confirmed(contributions); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1532,6 +1865,8 @@ CREATE FUNCTION was_confirmed(contributions) RETURNS boolean
               WHERE p.contribution_id = $1.id AND p.state = ANY(confirmed_states())
             );
           $_$;
+
+
 --
 -- Name: weekdays_from(integer, timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1547,6 +1882,8 @@ CREATE FUNCTION weekdays_from(weekdays integer, from_ts timestamp without time z
       LIMIT (weekdays + 1)
     ) a;
     $$;
+
+
 --
 -- Name: zone_expires_at(projects); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1556,15 +1893,8 @@ CREATE FUNCTION zone_expires_at(projects) RETURNS timestamp without time zone
     AS $_$
         SELECT public.zone_timestamp($1.expires_at);
       $_$;
---
--- Name: zone_timestamp(timestamp without time zone); Type: FUNCTION; Schema: public; Owner: -
---
 
-CREATE FUNCTION zone_timestamp(timestamp without time zone) RETURNS timestamp without time zone
-    LANGUAGE sql STABLE SECURITY DEFINER
-    AS $_$
-        SELECT $1::timestamptz AT TIME ZONE settings('timezone');
-      $_$;
+
 SET search_path = "time", pg_catalog;
 
 --
@@ -1574,6 +1904,8 @@ SET search_path = "time", pg_catalog;
 CREATE FUNCTION past_months(integer) RETURNS SETOF daterange
     LANGUAGE sql
     AS $_$SELECT daterange(to_char(generate_series::date, 'yyyy-mm-01')::date, to_char((generate_series + '1 month'::interval), 'yyyy-mm-01')::date) as month from generate_series(current_timestamp - ($1 || ' months')::interval, current_timestamp, '1 month')$_$;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -1586,7 +1918,187 @@ CREATE AGGREGATE median(numeric) (
     INITCOND = '{}',
     FINALFUNC = _final_median
 );
+
+
+--
+-- Name: balance_transactions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE balance_transactions (
+    id integer NOT NULL,
+    project_id integer,
+    contribution_id integer,
+    event_name text NOT NULL,
+    user_id integer NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone,
+    amount numeric NOT NULL,
+    balance_transfer_id integer
+);
+
+
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transactions; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balance_transactions AS
+ SELECT bt.user_id,
+    sum(
+        CASE
+            WHEN (bt.amount > (0)::numeric) THEN bt.amount
+            ELSE (0)::numeric
+        END) AS credit,
+    sum(
+        CASE
+            WHEN (bt.amount < (0)::numeric) THEN bt.amount
+            ELSE (0)::numeric
+        END) AS debit,
+    sum(bt.amount) AS total_amount,
+    (public.zone_timestamp(bt.created_at))::date AS created_at,
+    json_agg(json_build_object('amount', bt.amount, 'event_name', bt.event_name, 'origin_object', json_build_object('id', COALESCE(bt.project_id, bt.contribution_id), 'references_to',
+        CASE
+            WHEN (bt.project_id IS NOT NULL) THEN 'project'::text
+            WHEN (bt.contribution_id IS NOT NULL) THEN 'contribution'::text
+            ELSE NULL::text
+        END, 'name',
+        CASE
+            WHEN (bt.project_id IS NOT NULL) THEN ( SELECT projects.name
+               FROM public.projects
+              WHERE (projects.id = bt.project_id))
+            ELSE NULL::text
+        END))) AS source
+   FROM public.balance_transactions bt
+  WHERE public.is_owner_or_admin(bt.user_id)
+  GROUP BY bt.created_at, bt.user_id
+  ORDER BY ((public.zone_timestamp(bt.created_at))::date) DESC;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transfers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE balance_transfers (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    amount numeric NOT NULL,
+    transfer_id text,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transfers; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balance_transfers AS
+ SELECT bt.id,
+    bt.user_id,
+    bt.amount,
+    bt.transfer_id,
+    public.zone_timestamp(bt.created_at) AS created_at,
+    'pending'::text AS state
+   FROM public.balance_transfers bt
+  WHERE public.is_owner_or_admin(bt.user_id);
+
+
+--
+-- Name: balances; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW balances AS
+ SELECT bt.user_id,
+    sum(bt.amount) AS amount
+   FROM public.balance_transactions bt
+  WHERE public.is_owner_or_admin(bt.user_id)
+  GROUP BY bt.user_id;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: banks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE banks (
+    id integer NOT NULL,
+    name text NOT NULL,
+    code text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: project_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE project_accounts (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    bank_id integer,
+    email text NOT NULL,
+    state_inscription text,
+    address_street text NOT NULL,
+    address_number text NOT NULL,
+    address_complement text,
+    address_city text NOT NULL,
+    address_neighbourhood text NOT NULL,
+    address_state text NOT NULL,
+    address_zip_code text NOT NULL,
+    phone_number text NOT NULL,
+    agency text NOT NULL,
+    agency_digit text NOT NULL,
+    account text NOT NULL,
+    account_digit text NOT NULL,
+    owner_name text NOT NULL,
+    owner_document text NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    updated_at timestamp without time zone,
+    account_type text,
+    CONSTRAINT project_accounts_agency_check CHECK ((length(agency) >= 4))
+);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: bank_accounts; Type: VIEW; Schema: 1; Owner: -
+--
+
+CREATE VIEW bank_accounts AS
+ WITH p_accs AS (
+         SELECT p_1.user_id,
+            max(pa_1.id) AS last_id
+           FROM (public.project_accounts pa_1
+             JOIN public.projects p_1 ON ((pa_1.project_id = p_1.id)))
+          WHERE (public.successful_at(p_1.*) IS NOT NULL)
+          GROUP BY p_1.user_id
+        )
+ SELECT pac.user_id,
+    b.name AS bank_name,
+    b.code AS bank_code,
+    pa.account,
+    pa.account_digit,
+    pa.account_type,
+    pa.agency,
+    pa.agency_digit,
+    pa.owner_name,
+    pa.owner_document,
+    pa.created_at,
+    pa.updated_at
+   FROM (((p_accs pac
+     JOIN public.project_accounts pa ON ((pa.id = pac.last_id)))
+     JOIN public.projects p ON ((pa.project_id = p.id)))
+     LEFT JOIN public.banks b ON ((b.id = pa.bank_id)))
+  WHERE public.is_owner_or_admin(pac.user_id);
+
 
 --
 -- Name: categories; Type: TABLE; Schema: 1; Owner: -
@@ -1601,6 +2113,8 @@ CREATE TABLE categories (
 );
 
 ALTER TABLE ONLY categories REPLICA IDENTITY NOTHING;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -1614,6 +2128,8 @@ CREATE TABLE category_followers (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -1625,27 +2141,8 @@ CREATE VIEW category_followers AS
     c.user_id
    FROM public.category_followers c
   WHERE public.is_owner_or_admin(c.user_id);
---
--- Name: category_totals; Type: TABLE; Schema: 1; Owner: -
---
 
-CREATE TABLE category_totals (
-    category_id integer,
-    name text,
-    online_projects bigint,
-    successful_projects bigint,
-    failed_projects bigint,
-    avg_goal numeric,
-    avg_pledged numeric,
-    total_successful_value numeric,
-    total_value numeric,
-    name_pt text,
-    avg_value numeric,
-    total_contributors bigint,
-    followers bigint
-);
 
-ALTER TABLE ONLY category_totals REPLICA IDENTITY NOTHING;
 --
 -- Name: contribution_details; Type: VIEW; Schema: 1; Owner: -
 --
@@ -1660,8 +2157,8 @@ CREATE VIEW contribution_details AS
     p.permalink,
     p.name AS project_name,
     public.thumbnail_image(p.*) AS project_img,
-    p.online_date AS project_online_date,
-    p.expires_at AS project_expires_at,
+    public.zone_timestamp(public.online_at(p.*)) AS project_online_date,
+    public.zone_timestamp(p.expires_at) AS project_expires_at,
     (COALESCE(fp.state, (p.state)::text))::character varying(255) AS project_state,
     u.name AS user_name,
     public.thumbnail_image(u.*) AS user_profile_img,
@@ -1679,14 +2176,14 @@ CREATE VIEW contribution_details AS
     pa.gateway_fee,
     pa.gateway_data,
     pa.payment_method,
-    pa.created_at,
-    pa.created_at AS pending_at,
-    pa.paid_at,
-    pa.refused_at,
-    pa.pending_refund_at,
-    pa.refunded_at,
-    pa.deleted_at,
-    pa.chargeback_at,
+    public.zone_timestamp(pa.created_at) AS created_at,
+    public.zone_timestamp(pa.created_at) AS pending_at,
+    public.zone_timestamp(pa.paid_at) AS paid_at,
+    public.zone_timestamp(pa.refused_at) AS refused_at,
+    public.zone_timestamp(pa.pending_refund_at) AS pending_refund_at,
+    public.zone_timestamp(pa.refunded_at) AS refunded_at,
+    public.zone_timestamp(pa.deleted_at) AS deleted_at,
+    public.zone_timestamp(pa.chargeback_at) AS chargeback_at,
     pa.full_text_index,
     public.waiting_payment(pa.*) AS waiting_payment
    FROM ((((public.projects p
@@ -1694,6 +2191,8 @@ CREATE VIEW contribution_details AS
      JOIN public.contributions c ON ((c.project_id = p.id)))
      JOIN public.payments pa ON ((c.id = pa.contribution_id)))
      JOIN public.users u ON ((c.user_id = u.id)));
+
+
 --
 -- Name: contribution_reports; Type: VIEW; Schema: 1; Owner: -
 --
@@ -1729,6 +2228,8 @@ CREATE VIEW contribution_reports AS
      JOIN public.payments p ON ((p.contribution_id = b.id)))
      LEFT JOIN public.rewards r ON ((r.id = b.reward_id)))
   WHERE (p.state = ANY (ARRAY[('paid'::character varying)::text, ('refunded'::character varying)::text, ('pending_refund'::character varying)::text]));
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -1743,6 +2244,8 @@ CREATE TABLE settings (
     updated_at timestamp without time zone,
     CONSTRAINT configurations_name_not_blank CHECK ((length(btrim(name)) > 0))
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -1781,6 +2284,8 @@ CREATE VIEW contribution_reports_for_project_owners AS
      JOIN public.payments pa ON ((pa.contribution_id = b.id)))
      LEFT JOIN public.rewards r ON ((r.id = b.reward_id)))
   WHERE (pa.state = ANY (ARRAY['paid'::text, 'pending'::text, 'pending_refund'::text, 'refunded'::text]));
+
+
 --
 -- Name: contributions; Type: VIEW; Schema: 1; Owner: -
 --
@@ -1796,6 +2301,8 @@ CREATE VIEW contributions AS
     c.reward_id,
     c.created_at
    FROM public.contributions c;
+
+
 --
 -- Name: financial_reports; Type: VIEW; Schema: 1; Owner: -
 --
@@ -1808,6 +2315,8 @@ CREATE VIEW financial_reports AS
     p.state
    FROM (public.projects p
      JOIN public.users u ON ((u.id = p.user_id)));
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -1823,6 +2332,8 @@ CREATE TABLE categories (
     name_fr character varying(255),
     CONSTRAINT categories_name_not_blank CHECK ((length(btrim(name_pt)) > 0))
 );
+
+
 --
 -- Name: category_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1840,6 +2351,8 @@ CREATE TABLE category_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: contribution_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1857,6 +2370,8 @@ CREATE TABLE contribution_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: donation_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1874,6 +2389,8 @@ CREATE TABLE donation_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: donations; Type: TABLE; Schema: public; Owner: -
 --
@@ -1885,6 +2402,8 @@ CREATE TABLE donations (
     amount integer,
     user_id integer
 );
+
+
 --
 -- Name: project_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1902,6 +2421,8 @@ CREATE TABLE project_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: project_post_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1919,6 +2440,8 @@ CREATE TABLE project_post_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: project_posts; Type: TABLE; Schema: public; Owner: -
 --
@@ -1933,6 +2456,8 @@ CREATE TABLE project_posts (
     updated_at timestamp without time zone,
     exclusive boolean DEFAULT false
 );
+
+
 --
 -- Name: user_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1949,6 +2474,8 @@ CREATE TABLE user_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: user_transfer_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -1966,6 +2493,8 @@ CREATE TABLE user_transfer_notifications (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: user_transfers; Type: TABLE; Schema: public; Owner: -
 --
@@ -1980,6 +2509,8 @@ CREATE TABLE user_transfers (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -2056,6 +2587,8 @@ CREATE VIEW notifications AS
            FROM ((public.contribution_notifications cn
              JOIN public.contributions co ON ((co.id = cn.contribution_id)))
              JOIN public.projects p ON ((p.id = co.project_id)))) n;
+
+
 --
 -- Name: user_totals; Type: MATERIALIZED VIEW; Schema: 1; Owner: -
 --
@@ -2080,6 +2613,8 @@ CREATE MATERIALIZED VIEW user_totals AS
           WHERE (pa.state = ANY (public.confirmed_states()))
           GROUP BY c.user_id) ct ON ((u.id = ct.user_id)))
   WITH NO DATA;
+
+
 --
 -- Name: project_contributions; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2105,6 +2640,8 @@ CREATE VIEW project_contributions AS
      JOIN public.payments pa ON ((pa.contribution_id = c.id)))
      LEFT JOIN user_totals ut ON ((ut.user_id = u.id)))
   WHERE ((public.was_confirmed(c.*) OR public.waiting_payment(pa.*)) AND ((NOT c.anonymous) OR public.is_owner_or_admin(p.user_id)));
+
+
 --
 -- Name: project_contributions_per_day; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2122,6 +2659,8 @@ CREATE VIEW project_contributions_per_day AS
           GROUP BY ((p.paid_at)::date), c.project_id
           ORDER BY ((p.paid_at)::date)) i
   GROUP BY i.project_id;
+
+
 --
 -- Name: project_contributions_per_location; Type: TABLE; Schema: 1; Owner: -
 --
@@ -2132,6 +2671,8 @@ CREATE TABLE project_contributions_per_location (
 );
 
 ALTER TABLE ONLY project_contributions_per_location REPLICA IDENTITY NOTHING;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -2145,6 +2686,8 @@ CREATE TABLE origins (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -2165,6 +2708,8 @@ CREATE VIEW project_contributions_per_ref AS
           WHERE public.was_confirmed(c.*)
           GROUP BY o.referral, o.domain, c.project_id) i
   GROUP BY i.project_id;
+
+
 --
 -- Name: project_details; Type: TABLE; Schema: 1; Owner: -
 --
@@ -2218,6 +2763,8 @@ CREATE TABLE project_details (
 );
 
 ALTER TABLE ONLY project_details REPLICA IDENTITY NOTHING;
+
+
 --
 -- Name: project_financials; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2251,6 +2798,8 @@ CREATE VIEW project_financials AS
      LEFT JOIN project_totals pt ON ((pt.project_id = p.id)))
      CROSS JOIN catarse_fee_percentage cp)
      CROSS JOIN catarse_base_url);
+
+
 --
 -- Name: project_posts_details; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2269,6 +2818,8 @@ CREATE VIEW project_posts_details AS
     pp.created_at
    FROM (public.project_posts pp
      JOIN public.projects p ON ((p.id = pp.project_id)));
+
+
 --
 -- Name: project_reminders; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2278,6 +2829,8 @@ CREATE VIEW project_reminders AS
     pr.user_id
    FROM public.project_reminders pr
   WHERE public.is_owner_or_admin(pr.user_id);
+
+
 --
 -- Name: project_transfers; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2298,6 +2851,8 @@ CREATE VIEW project_transfers AS
     (((pt.pledged - public.total_catarse_fee(p.*)) + public.irrf_tax(p.*)) + public.pcc_tax(p.*)) AS total_amount
    FROM (public.projects p
      LEFT JOIN project_totals pt ON ((pt.project_id = p.id)));
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -2314,6 +2869,8 @@ CREATE TABLE flexible_project_transitions (
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
+
+
 --
 -- Name: project_transitions; Type: TABLE; Schema: public; Owner: -
 --
@@ -2328,6 +2885,8 @@ CREATE TABLE project_transitions (
     created_at timestamp without time zone NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -2349,6 +2908,8 @@ UNION ALL
     fpt.created_at
    FROM (public.flexible_project_transitions fpt
      JOIN public.flexible_projects fp ON ((fpt.flexible_project_id = fp.id)));
+
+
 --
 -- Name: recommendations; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2381,6 +2942,8 @@ CREATE VIEW recommendations AS
           WHERE (public.was_confirmed(b2.*) AND (b2.user_id = recommendations.user_id) AND (b2.project_id = recommendations.project_id)))))
   GROUP BY recommendations.user_id, recommendations.project_id
   ORDER BY ((sum(recommendations.count))::bigint) DESC;
+
+
 --
 -- Name: referral_totals; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2396,6 +2959,8 @@ CREATE VIEW referral_totals AS
      JOIN public.projects p ON ((p.id = c.project_id)))
      LEFT JOIN public.origins o ON ((o.id = c.origin_id)))
   GROUP BY (to_char(c.created_at, 'YYYY-MM'::text)), COALESCE(NULLIF(o.referral, ''::text), o.domain), p.permalink;
+
+
 --
 -- Name: reward_details; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2412,6 +2977,8 @@ CREATE VIEW reward_details AS
     public.waiting_payment_count(r.*) AS waiting_payment_count
    FROM public.rewards r
   ORDER BY r.row_order;
+
+
 --
 -- Name: statistics; Type: MATERIALIZED VIEW; Schema: 1; Owner: -
 --
@@ -2434,17 +3001,20 @@ CREATE MATERIALIZED VIEW statistics AS
     ( SELECT count(*) AS total_projects,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'successful'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'successful'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_success,
             count(
                 CASE
-                    WHEN ((projects.state)::text = 'online'::text) THEN 1
+                    WHEN (COALESCE(fp.state, (p.state)::text) = 'online'::text) THEN 1
                     ELSE NULL::integer
                 END) AS total_projects_online
-           FROM public.projects
-          WHERE ((projects.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('rejected'::character varying)::text]))) projects_totals
+           FROM (public.projects p
+             LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
+          WHERE (COALESCE(fp.state, (p.state)::text) <> ALL (ARRAY['draft'::text, 'rejected'::text]))) projects_totals
   WITH NO DATA;
+
+
 --
 -- Name: team_members; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2459,6 +3029,8 @@ CREATE VIEW team_members AS
      LEFT JOIN user_totals ut ON ((ut.user_id = u.id)))
   WHERE u.admin
   ORDER BY u.name;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -2471,6 +3043,8 @@ CREATE TABLE countries (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -2487,6 +3061,8 @@ CREATE VIEW team_totals AS
      LEFT JOIN public.contributions c ON ((c.user_id = u.id)))
      LEFT JOIN public.countries country ON ((country.id = u.country_id)))
   WHERE u.admin;
+
+
 --
 -- Name: user_credits; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2520,6 +3096,8 @@ CREATE VIEW user_credits AS
              JOIN public.projects p ON ((c.project_id = p.id)))
           WHERE (pa.state = ANY (public.confirmed_states()))
           GROUP BY c.user_id) ct ON ((u.id = ct.user_id)));
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -2533,6 +3111,8 @@ CREATE TABLE user_links (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -2558,6 +3138,8 @@ CREATE VIEW user_details AS
           WHERE (ul.user_id = u.id)) AS links
    FROM (public.users u
      LEFT JOIN user_totals ut ON ((ut.user_id = u.id)));
+
+
 --
 -- Name: users; Type: VIEW; Schema: 1; Owner: -
 --
@@ -2575,6 +3157,8 @@ CREATE VIEW users AS
     u.deactivated_at,
     u.full_text_index
    FROM public.users u;
+
+
 --
 -- Name: year_totals; Type: MATERIALIZED VIEW; Schema: 1; Owner: -
 --
@@ -2621,6 +3205,8 @@ CREATE MATERIALIZED VIEW year_totals AS
    FROM (year_totals yt
      JOIN new_contributors nc USING (ano))
   WITH NO DATA;
+
+
 SET search_path = api_updates, pg_catalog;
 
 --
@@ -2634,6 +3220,8 @@ CREATE TABLE contributions (
     user_id integer,
     reward_id integer
 );
+
+
 SET search_path = financial, pg_catalog;
 
 --
@@ -2656,6 +3244,8 @@ CREATE VIEW payment_due_dates AS
    FROM (generate_series(1, 24) gs(gs)
      JOIN public.payments p ON ((p.installments >= gs.gs)))
   WHERE ((lower(p.gateway) = 'pagarme'::text) AND (p.state = ANY (ARRAY['paid'::text, 'pending_refund'::text])));
+
+
 --
 -- Name: project_payments_due; Type: VIEW; Schema: financial; Owner: -
 --
@@ -2679,6 +3269,8 @@ CREATE VIEW project_payments_due AS
      JOIN payment_due_dates dd ON ((dd.contribution_id = c.id)))
   WHERE ((p.state)::text = ANY (ARRAY[('online'::character varying)::text, ('failed'::character varying)::text, ('successful'::character varying)::text, ('waiting_funds'::character varying)::text]))
   ORDER BY p.id DESC;
+
+
 --
 -- Name: payments_due_summary; Type: VIEW; Schema: financial; Owner: -
 --
@@ -2691,6 +3283,36 @@ CREATE VIEW payments_due_summary AS
    FROM project_payments_due p
   GROUP BY p.project_state, p.state, p.payment_method
   ORDER BY p.project_state, p.state, p.payment_method;
+
+
+--
+-- Name: project_metrics_with_generated_series; Type: TABLE; Schema: financial; Owner: -
+--
+
+CREATE TABLE project_metrics_with_generated_series (
+    permalink text,
+    categoria text,
+    state character varying(255),
+    total_contributions bigint,
+    media_apoio numeric,
+    percentual_arrecadado numeric,
+    pledged numeric,
+    goal numeric,
+    data_online date,
+    data_expiracao date,
+    online_days integer,
+    "3 dias" numeric,
+    "7 dias" numeric,
+    "1 quartil" numeric,
+    metade numeric,
+    "3 quartil" numeric,
+    novidades bigint,
+    projetos_realizdor bigint
+);
+
+ALTER TABLE ONLY project_metrics_with_generated_series REPLICA IDENTITY NOTHING;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -2705,6 +3327,8 @@ CREATE TABLE authorizations (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
+
+
 --
 -- Name: authorizations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2715,11 +3339,53 @@ CREATE SEQUENCE authorizations_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: authorizations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE authorizations_id_seq OWNED BY authorizations.id;
+
+
+--
+-- Name: balance_transactions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE balance_transactions_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: balance_transactions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE balance_transactions_id_seq OWNED BY balance_transactions.id;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE balance_transfers_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE balance_transfers_id_seq OWNED BY balance_transfers.id;
+
+
 --
 -- Name: bank_accounts; Type: TABLE; Schema: public; Owner: -
 --
@@ -2737,6 +3403,8 @@ CREATE TABLE bank_accounts (
     agency_digit text,
     bank_id integer NOT NULL
 );
+
+
 --
 -- Name: bank_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2747,22 +3415,15 @@ CREATE SEQUENCE bank_accounts_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: bank_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE bank_accounts_id_seq OWNED BY bank_accounts.id;
---
--- Name: banks; Type: TABLE; Schema: public; Owner: -
---
 
-CREATE TABLE banks (
-    id integer NOT NULL,
-    name text NOT NULL,
-    code text NOT NULL,
-    created_at timestamp without time zone DEFAULT now(),
-    updated_at timestamp without time zone
-);
+
 --
 -- Name: banks_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2773,11 +3434,15 @@ CREATE SEQUENCE banks_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: banks_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE banks_id_seq OWNED BY banks.id;
+
+
 --
 -- Name: categories_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2788,11 +3453,15 @@ CREATE SEQUENCE categories_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: categories_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE categories_id_seq OWNED BY categories.id;
+
+
 --
 -- Name: category_followers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2803,11 +3472,15 @@ CREATE SEQUENCE category_followers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: category_followers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE category_followers_id_seq OWNED BY category_followers.id;
+
+
 --
 -- Name: category_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2818,11 +3491,15 @@ CREATE SEQUENCE category_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: category_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE category_notifications_id_seq OWNED BY category_notifications.id;
+
+
 --
 -- Name: channel_partners; Type: TABLE; Schema: public; Owner: -
 --
@@ -2835,6 +3512,8 @@ CREATE TABLE channel_partners (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: channel_partners_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2845,11 +3524,15 @@ CREATE SEQUENCE channel_partners_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channel_partners_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channel_partners_id_seq OWNED BY channel_partners.id;
+
+
 --
 -- Name: channel_post_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -2867,6 +3550,8 @@ CREATE TABLE channel_post_notifications (
     updated_at timestamp without time zone,
     deliver_at timestamp without time zone DEFAULT now()
 );
+
+
 --
 -- Name: channel_post_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2877,11 +3562,15 @@ CREATE SEQUENCE channel_post_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channel_post_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channel_post_notifications_id_seq OWNED BY channel_post_notifications.id;
+
+
 --
 -- Name: channel_posts; Type: TABLE; Schema: public; Owner: -
 --
@@ -2898,6 +3587,8 @@ CREATE TABLE channel_posts (
     updated_at timestamp without time zone,
     published_at timestamp without time zone
 );
+
+
 --
 -- Name: channel_posts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2908,11 +3599,15 @@ CREATE SEQUENCE channel_posts_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channel_posts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channel_posts_id_seq OWNED BY channel_posts.id;
+
+
 --
 -- Name: channels; Type: TABLE; Schema: public; Owner: -
 --
@@ -2936,6 +3631,8 @@ CREATE TABLE channels (
     video_embed_url text,
     ga_code text
 );
+
+
 --
 -- Name: channels_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2946,11 +3643,15 @@ CREATE SEQUENCE channels_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channels_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channels_id_seq OWNED BY channels.id;
+
+
 --
 -- Name: channels_projects; Type: TABLE; Schema: public; Owner: -
 --
@@ -2960,6 +3661,8 @@ CREATE TABLE channels_projects (
     channel_id integer,
     project_id integer
 );
+
+
 --
 -- Name: channels_projects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2970,11 +3673,15 @@ CREATE SEQUENCE channels_projects_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channels_projects_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channels_projects_id_seq OWNED BY channels_projects.id;
+
+
 --
 -- Name: channels_subscribers; Type: TABLE; Schema: public; Owner: -
 --
@@ -2984,6 +3691,8 @@ CREATE TABLE channels_subscribers (
     user_id integer NOT NULL,
     channel_id integer NOT NULL
 );
+
+
 --
 -- Name: channels_subscribers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -2994,11 +3703,15 @@ CREATE SEQUENCE channels_subscribers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: channels_subscribers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE channels_subscribers_id_seq OWNED BY channels_subscribers.id;
+
+
 --
 -- Name: cities_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3009,11 +3722,15 @@ CREATE SEQUENCE cities_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: cities_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE cities_id_seq OWNED BY cities.id;
+
+
 --
 -- Name: configurations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3024,11 +3741,15 @@ CREATE SEQUENCE configurations_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: configurations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE configurations_id_seq OWNED BY settings.id;
+
+
 --
 -- Name: contribution_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3039,11 +3760,15 @@ CREATE SEQUENCE contribution_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: contribution_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE contribution_notifications_id_seq OWNED BY contribution_notifications.id;
+
+
 --
 -- Name: contributions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3054,11 +3779,15 @@ CREATE SEQUENCE contributions_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: contributions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE contributions_id_seq OWNED BY contributions.id;
+
+
 --
 -- Name: countries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3069,11 +3798,15 @@ CREATE SEQUENCE countries_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: countries_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE countries_id_seq OWNED BY countries.id;
+
+
 --
 -- Name: credit_cards; Type: TABLE; Schema: public; Owner: -
 --
@@ -3088,6 +3821,8 @@ CREATE TABLE credit_cards (
     updated_at timestamp without time zone,
     card_key text
 );
+
+
 --
 -- Name: credit_cards_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3098,11 +3833,15 @@ CREATE SEQUENCE credit_cards_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: credit_cards_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE credit_cards_id_seq OWNED BY credit_cards.id;
+
+
 --
 -- Name: dbhero_dataclips; Type: TABLE; Schema: public; Owner: -
 --
@@ -3117,6 +3856,8 @@ CREATE TABLE dbhero_dataclips (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
+
+
 --
 -- Name: dbhero_dataclips_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3127,11 +3868,15 @@ CREATE SEQUENCE dbhero_dataclips_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: dbhero_dataclips_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE dbhero_dataclips_id_seq OWNED BY dbhero_dataclips.id;
+
+
 --
 -- Name: deps_saved_ddl; Type: TABLE; Schema: public; Owner: -
 --
@@ -3142,6 +3887,8 @@ CREATE TABLE deps_saved_ddl (
     deps_view_name text,
     deps_ddl_to_run text
 );
+
+
 --
 -- Name: deps_saved_ddl_deps_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3152,11 +3899,15 @@ CREATE SEQUENCE deps_saved_ddl_deps_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: deps_saved_ddl_deps_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE deps_saved_ddl_deps_id_seq OWNED BY deps_saved_ddl.deps_id;
+
+
 --
 -- Name: donation_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3167,11 +3918,15 @@ CREATE SEQUENCE donation_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: donation_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE donation_notifications_id_seq OWNED BY donation_notifications.id;
+
+
 --
 -- Name: donations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3182,11 +3937,15 @@ CREATE SEQUENCE donations_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: donations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE donations_id_seq OWNED BY donations.id;
+
+
 --
 -- Name: flexible_project_states; Type: TABLE; Schema: public; Owner: -
 --
@@ -3195,6 +3954,8 @@ CREATE TABLE flexible_project_states (
     state text NOT NULL,
     state_order project_state_order NOT NULL
 );
+
+
 --
 -- Name: flexible_project_transitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3205,11 +3966,15 @@ CREATE SEQUENCE flexible_project_transitions_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: flexible_project_transitions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE flexible_project_transitions_id_seq OWNED BY flexible_project_transitions.id;
+
+
 --
 -- Name: flexible_projects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3220,11 +3985,15 @@ CREATE SEQUENCE flexible_projects_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: flexible_projects_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE flexible_projects_id_seq OWNED BY flexible_projects.id;
+
+
 --
 -- Name: near_mes; Type: TABLE; Schema: public; Owner: -
 --
@@ -3232,6 +4001,8 @@ ALTER SEQUENCE flexible_projects_id_seq OWNED BY flexible_projects.id;
 CREATE TABLE near_mes (
     id integer NOT NULL
 );
+
+
 --
 -- Name: near_mes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3242,11 +4013,15 @@ CREATE SEQUENCE near_mes_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: near_mes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE near_mes_id_seq OWNED BY near_mes.id;
+
+
 --
 -- Name: oauth_providers; Type: TABLE; Schema: public; Owner: -
 --
@@ -3266,6 +4041,8 @@ CREATE TABLE oauth_providers (
     CONSTRAINT oauth_providers_name_not_blank CHECK ((length(btrim(name)) > 0)),
     CONSTRAINT oauth_providers_secret_not_blank CHECK ((length(btrim(secret)) > 0))
 );
+
+
 --
 -- Name: oauth_providers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3276,11 +4053,15 @@ CREATE SEQUENCE oauth_providers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: oauth_providers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE oauth_providers_id_seq OWNED BY oauth_providers.id;
+
+
 --
 -- Name: origins_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3291,11 +4072,15 @@ CREATE SEQUENCE origins_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: origins_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE origins_id_seq OWNED BY origins.id;
+
+
 --
 -- Name: payment_logs; Type: TABLE; Schema: public; Owner: -
 --
@@ -3307,6 +4092,8 @@ CREATE TABLE payment_logs (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: payment_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3317,11 +4104,15 @@ CREATE SEQUENCE payment_logs_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: payment_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE payment_logs_id_seq OWNED BY payment_logs.id;
+
+
 --
 -- Name: payment_notifications; Type: TABLE; Schema: public; Owner: -
 --
@@ -3334,6 +4125,8 @@ CREATE TABLE payment_notifications (
     updated_at timestamp without time zone NOT NULL,
     payment_id integer
 );
+
+
 --
 -- Name: payment_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3344,11 +4137,15 @@ CREATE SEQUENCE payment_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: payment_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE payment_notifications_id_seq OWNED BY payment_notifications.id;
+
+
 --
 -- Name: payment_transfers; Type: TABLE; Schema: public; Owner: -
 --
@@ -3362,6 +4159,8 @@ CREATE TABLE payment_transfers (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: payment_transfers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3372,11 +4171,15 @@ CREATE SEQUENCE payment_transfers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: payment_transfers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE payment_transfers_id_seq OWNED BY payment_transfers.id;
+
+
 --
 -- Name: payments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3387,11 +4190,15 @@ CREATE SEQUENCE payments_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: payments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE payments_id_seq OWNED BY payments.id;
+
+
 --
 -- Name: project_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3402,11 +4209,15 @@ CREATE SEQUENCE project_accounts_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_accounts_id_seq OWNED BY project_accounts.id;
+
+
 --
 -- Name: project_budgets; Type: TABLE; Schema: public; Owner: -
 --
@@ -3419,6 +4230,8 @@ CREATE TABLE project_budgets (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: project_budgets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3429,11 +4242,48 @@ CREATE SEQUENCE project_budgets_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_budgets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_budgets_id_seq OWNED BY project_budgets.id;
+
+
+--
+-- Name: project_errors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE project_errors (
+    id integer NOT NULL,
+    project_id integer NOT NULL,
+    error text,
+    to_state text NOT NULL,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE project_errors_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: project_errors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE project_errors_id_seq OWNED BY project_errors.id;
+
+
 --
 -- Name: project_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3444,11 +4294,15 @@ CREATE SEQUENCE project_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_notifications_id_seq OWNED BY project_notifications.id;
+
+
 --
 -- Name: project_post_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3459,11 +4313,15 @@ CREATE SEQUENCE project_post_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_post_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_post_notifications_id_seq OWNED BY project_post_notifications.id;
+
+
 --
 -- Name: project_reminders_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3474,11 +4332,15 @@ CREATE SEQUENCE project_reminders_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_reminders_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_reminders_id_seq OWNED BY project_reminders.id;
+
+
 --
 -- Name: project_states; Type: TABLE; Schema: public; Owner: -
 --
@@ -3487,6 +4349,8 @@ CREATE TABLE project_states (
     state text NOT NULL,
     state_order project_state_order NOT NULL
 );
+
+
 --
 -- Name: project_transitions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3497,11 +4361,15 @@ CREATE SEQUENCE project_transitions_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: project_transitions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE project_transitions_id_seq OWNED BY project_transitions.id;
+
+
 --
 -- Name: projects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3512,11 +4380,15 @@ CREATE SEQUENCE projects_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: projects_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE projects_id_seq OWNED BY projects.id;
+
+
 --
 -- Name: projects_in_analysis_by_periods; Type: VIEW; Schema: public; Owner: -
 --
@@ -3532,13 +4404,13 @@ CREATE VIEW projects_in_analysis_by_periods AS
          SELECT w.label,
             count(*) AS current_year
            FROM (projects p
-             JOIN weeks w ON ((w.current_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.current_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         ), last_year AS (
          SELECT w.label,
             count(*) AS last_year
            FROM (projects p
-             JOIN weeks w ON ((w.last_year = to_char(p.sent_to_analysis_at, 'yyyy-mm W'::text))))
+             JOIN weeks w ON ((w.last_year = to_char(in_analysis_at(p.*), 'yyyy-mm W'::text))))
           GROUP BY w.label
         )
  SELECT current_year.label,
@@ -3546,6 +4418,42 @@ CREATE VIEW projects_in_analysis_by_periods AS
     last_year.last_year
    FROM (current_year
      JOIN last_year USING (label));
+
+
+--
+-- Name: rdevents; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE rdevents (
+    id integer NOT NULL,
+    user_id integer NOT NULL,
+    project_id integer,
+    event_name text NOT NULL,
+    metadata json,
+    created_at timestamp without time zone DEFAULT '2016-01-25 21:12:53.725164'::timestamp without time zone,
+    updated_at timestamp without time zone
+);
+
+
+--
+-- Name: rdevents_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE rdevents_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: rdevents_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE rdevents_id_seq OWNED BY rdevents.id;
+
+
 --
 -- Name: redactor_assets; Type: TABLE; Schema: public; Owner: -
 --
@@ -3564,6 +4472,8 @@ CREATE TABLE redactor_assets (
     created_at timestamp without time zone DEFAULT now(),
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: redactor_assets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3574,11 +4484,15 @@ CREATE SEQUENCE redactor_assets_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: redactor_assets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE redactor_assets_id_seq OWNED BY redactor_assets.id;
+
+
 --
 -- Name: rewards_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3589,11 +4503,15 @@ CREATE SEQUENCE rewards_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: rewards_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE rewards_id_seq OWNED BY rewards.id;
+
+
 --
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: -
 --
@@ -3601,6 +4519,8 @@ ALTER SEQUENCE rewards_id_seq OWNED BY rewards.id;
 CREATE TABLE schema_migrations (
     version character varying(255) NOT NULL
 );
+
+
 --
 -- Name: sendgrid_events; Type: TABLE; Schema: public; Owner: -
 --
@@ -3618,6 +4538,8 @@ CREATE TABLE sendgrid_events (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: sendgrid_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3628,11 +4550,15 @@ CREATE SEQUENCE sendgrid_events_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: sendgrid_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE sendgrid_events_id_seq OWNED BY sendgrid_events.id;
+
+
 --
 -- Name: states_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3643,11 +4569,15 @@ CREATE SEQUENCE states_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: states_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE states_id_seq OWNED BY states.id;
+
+
 --
 -- Name: subscriber_reports; Type: VIEW; Schema: public; Owner: -
 --
@@ -3659,6 +4589,8 @@ CREATE VIEW subscriber_reports AS
     u.email
    FROM (users u
      JOIN channels_subscribers cs ON ((cs.user_id = u.id)));
+
+
 --
 -- Name: taggings; Type: TABLE; Schema: public; Owner: -
 --
@@ -3670,6 +4602,8 @@ CREATE TABLE taggings (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: taggings_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3680,11 +4614,15 @@ CREATE SEQUENCE taggings_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: taggings_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE taggings_id_seq OWNED BY taggings.id;
+
+
 --
 -- Name: tags; Type: TABLE; Schema: public; Owner: -
 --
@@ -3696,6 +4634,8 @@ CREATE TABLE tags (
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
+
+
 --
 -- Name: tags_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3706,11 +4646,15 @@ CREATE SEQUENCE tags_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: tags_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE tags_id_seq OWNED BY tags.id;
+
+
 --
 -- Name: unsubscribes; Type: TABLE; Schema: public; Owner: -
 --
@@ -3722,6 +4666,8 @@ CREATE TABLE unsubscribes (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone NOT NULL
 );
+
+
 --
 -- Name: unsubscribes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3732,11 +4678,15 @@ CREATE SEQUENCE unsubscribes_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: unsubscribes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE unsubscribes_id_seq OWNED BY unsubscribes.id;
+
+
 --
 -- Name: updates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3747,11 +4697,15 @@ CREATE SEQUENCE updates_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: updates_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE updates_id_seq OWNED BY project_posts.id;
+
+
 --
 -- Name: user_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3762,11 +4716,15 @@ CREATE SEQUENCE user_links_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: user_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE user_links_id_seq OWNED BY user_links.id;
+
+
 --
 -- Name: user_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3777,11 +4735,15 @@ CREATE SEQUENCE user_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: user_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE user_notifications_id_seq OWNED BY user_notifications.id;
+
+
 --
 -- Name: user_transfer_notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3792,11 +4754,15 @@ CREATE SEQUENCE user_transfer_notifications_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: user_transfer_notifications_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE user_transfer_notifications_id_seq OWNED BY user_transfer_notifications.id;
+
+
 --
 -- Name: user_transfers_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3807,11 +4773,15 @@ CREATE SEQUENCE user_transfers_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: user_transfers_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE user_transfers_id_seq OWNED BY user_transfers.id;
+
+
 --
 -- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
@@ -3822,11 +4792,15 @@ CREATE SEQUENCE users_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: users_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
 --
 
 ALTER SEQUENCE users_id_seq OWNED BY users.id;
+
+
 SET search_path = temp, pg_catalog;
 
 --
@@ -3836,6 +4810,8 @@ SET search_path = temp, pg_catalog;
 CREATE TABLE apoios_moip (
     key text
 );
+
+
 --
 -- Name: apoios_moip7_8; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3843,6 +4819,8 @@ CREATE TABLE apoios_moip (
 CREATE TABLE apoios_moip7_8 (
     key text
 );
+
+
 --
 -- Name: apoios_moip_0106_2210; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3850,6 +4828,8 @@ CREATE TABLE apoios_moip7_8 (
 CREATE TABLE apoios_moip_0106_2210 (
     key text
 );
+
+
 --
 -- Name: apoios_paypal; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3857,6 +4837,8 @@ CREATE TABLE apoios_moip_0106_2210 (
 CREATE TABLE apoios_paypal (
     id text
 );
+
+
 --
 -- Name: apoios_paypal_0106_2210; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3864,6 +4846,8 @@ CREATE TABLE apoios_paypal (
 CREATE TABLE apoios_paypal_0106_2210 (
     payment_id text
 );
+
+
 --
 -- Name: budget_before_redactor; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3872,6 +4856,8 @@ CREATE TABLE budget_before_redactor (
     id integer,
     budget text
 );
+
+
 --
 -- Name: contributions_to_confirm; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3886,6 +4872,8 @@ CREATE TABLE contributions_to_confirm (
     state character varying(255),
     permalink text
 );
+
+
 --
 -- Name: contributions_to_fix; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3898,6 +4886,8 @@ CREATE TABLE contributions_to_fix (
     value numeric,
     payer_email text
 );
+
+
 --
 -- Name: fixed_amex_rates; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3906,6 +4896,8 @@ CREATE TABLE fixed_amex_rates (
     id integer,
     payment_service_fee numeric
 );
+
+
 --
 -- Name: lista_ceps; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3914,6 +4906,8 @@ CREATE TABLE lista_ceps (
     id character varying(255),
     cep character varying(255)
 );
+
+
 --
 -- Name: lost_thumbs; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3921,6 +4915,8 @@ CREATE TABLE lista_ceps (
 CREATE TABLE lost_thumbs (
     id integer
 );
+
+
 --
 -- Name: moip_jan_2014_backers; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3931,6 +4927,8 @@ CREATE TABLE moip_jan_2014_backers (
     moip_confirmed_time text,
     moip_status text
 );
+
+
 --
 -- Name: moip_payments; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3963,6 +4961,8 @@ CREATE TABLE moip_payments (
     parcelas text,
     id_lojista text
 );
+
+
 --
 -- Name: pagarme_audit; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3978,6 +4978,8 @@ CREATE TABLE pagarme_audit (
     transaction_created text,
     transaction_customer_email text
 );
+
+
 --
 -- Name: paypal_7_8; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3985,6 +4987,8 @@ CREATE TABLE pagarme_audit (
 CREATE TABLE paypal_7_8 (
     key text
 );
+
+
 --
 -- Name: paypal_dez_2013_backers; Type: TABLE; Schema: temp; Owner: -
 --
@@ -3995,6 +4999,8 @@ CREATE TABLE paypal_dez_2013_backers (
     paypal_confirmed_time text,
     paypal_status text
 );
+
+
 --
 -- Name: paypal_jan_2014_backers; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4005,6 +5011,8 @@ CREATE TABLE paypal_jan_2014_backers (
     paypal_confirmed_time text,
     paypal_status text
 );
+
+
 --
 -- Name: paypal_payments; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4054,6 +5062,8 @@ CREATE TABLE paypal_payments (
     numerodotelefoneparacontato text,
     extra text
 );
+
+
 --
 -- Name: paypal_temp_backers; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4061,6 +5071,8 @@ CREATE TABLE paypal_payments (
 CREATE TABLE paypal_temp_backers (
     payment_id text NOT NULL
 );
+
+
 --
 -- Name: project_ranges; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4070,6 +5082,8 @@ CREATE TABLE project_ranges (
     range tstzrange,
     state character varying(255)
 );
+
+
 --
 -- Name: slips_to_update_fee; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4079,6 +5093,8 @@ CREATE TABLE slips_to_update_fee (
     gateway_id integer,
     fee numeric
 );
+
+
 --
 -- Name: sorbonne; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4090,6 +5106,8 @@ CREATE TABLE sorbonne (
     wave integer DEFAULT 1 NOT NULL,
     row_number integer
 );
+
+
 --
 -- Name: sorbonne_reinvite; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4100,6 +5118,8 @@ CREATE TABLE sorbonne_reinvite (
     name text,
     wave integer
 );
+
+
 --
 -- Name: taxa_antiga_pagarme; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4109,6 +5129,8 @@ CREATE TABLE taxa_antiga_pagarme (
     payment_id integer,
     new_payment_service_fee numeric
 );
+
+
 --
 -- Name: temp_projects_to_get_some_info; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4117,6 +5139,8 @@ CREATE TABLE temp_projects_to_get_some_info (
     name text,
     original_id integer
 );
+
+
 --
 -- Name: workshops; Type: TABLE; Schema: temp; Owner: -
 --
@@ -4128,6 +5152,8 @@ CREATE TABLE workshops (
     workshop text NOT NULL,
     scheduled_at date NOT NULL
 );
+
+
 --
 -- Name: workshops_id_seq; Type: SEQUENCE; Schema: temp; Owner: -
 --
@@ -4138,11 +5164,15 @@ CREATE SEQUENCE workshops_id_seq
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
+
+
 --
 -- Name: workshops_id_seq; Type: SEQUENCE OWNED BY; Schema: temp; Owner: -
 --
 
 ALTER SEQUENCE workshops_id_seq OWNED BY workshops.id;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -4150,261 +5180,393 @@ SET search_path = public, pg_catalog;
 --
 
 ALTER TABLE ONLY authorizations ALTER COLUMN id SET DEFAULT nextval('authorizations_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions ALTER COLUMN id SET DEFAULT nextval('balance_transactions_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transfers ALTER COLUMN id SET DEFAULT nextval('balance_transfers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY bank_accounts ALTER COLUMN id SET DEFAULT nextval('bank_accounts_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY banks ALTER COLUMN id SET DEFAULT nextval('banks_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY categories ALTER COLUMN id SET DEFAULT nextval('categories_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_followers ALTER COLUMN id SET DEFAULT nextval('category_followers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_notifications ALTER COLUMN id SET DEFAULT nextval('category_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_partners ALTER COLUMN id SET DEFAULT nextval('channel_partners_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_post_notifications ALTER COLUMN id SET DEFAULT nextval('channel_post_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_posts ALTER COLUMN id SET DEFAULT nextval('channel_posts_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels ALTER COLUMN id SET DEFAULT nextval('channels_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_projects ALTER COLUMN id SET DEFAULT nextval('channels_projects_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_subscribers ALTER COLUMN id SET DEFAULT nextval('channels_subscribers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY cities ALTER COLUMN id SET DEFAULT nextval('cities_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contribution_notifications ALTER COLUMN id SET DEFAULT nextval('contribution_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions ALTER COLUMN id SET DEFAULT nextval('contributions_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY countries ALTER COLUMN id SET DEFAULT nextval('countries_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY credit_cards ALTER COLUMN id SET DEFAULT nextval('credit_cards_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY dbhero_dataclips ALTER COLUMN id SET DEFAULT nextval('dbhero_dataclips_id_seq'::regclass);
+
+
 --
 -- Name: deps_id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY deps_saved_ddl ALTER COLUMN deps_id SET DEFAULT nextval('deps_saved_ddl_deps_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY donation_notifications ALTER COLUMN id SET DEFAULT nextval('donation_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY donations ALTER COLUMN id SET DEFAULT nextval('donations_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY flexible_project_transitions ALTER COLUMN id SET DEFAULT nextval('flexible_project_transitions_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY flexible_projects ALTER COLUMN id SET DEFAULT nextval('flexible_projects_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY near_mes ALTER COLUMN id SET DEFAULT nextval('near_mes_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY oauth_providers ALTER COLUMN id SET DEFAULT nextval('oauth_providers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY origins ALTER COLUMN id SET DEFAULT nextval('origins_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_logs ALTER COLUMN id SET DEFAULT nextval('payment_logs_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_notifications ALTER COLUMN id SET DEFAULT nextval('payment_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_transfers ALTER COLUMN id SET DEFAULT nextval('payment_transfers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payments ALTER COLUMN id SET DEFAULT nextval('payments_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_accounts ALTER COLUMN id SET DEFAULT nextval('project_accounts_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_budgets ALTER COLUMN id SET DEFAULT nextval('project_budgets_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors ALTER COLUMN id SET DEFAULT nextval('project_errors_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_notifications ALTER COLUMN id SET DEFAULT nextval('project_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_post_notifications ALTER COLUMN id SET DEFAULT nextval('project_post_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_posts ALTER COLUMN id SET DEFAULT nextval('updates_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_reminders ALTER COLUMN id SET DEFAULT nextval('project_reminders_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_transitions ALTER COLUMN id SET DEFAULT nextval('project_transitions_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects ALTER COLUMN id SET DEFAULT nextval('projects_id_seq'::regclass);
+
+
 --
 -- Name: permalink; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects ALTER COLUMN permalink SET DEFAULT ('project_'::text || (currval('projects_id_seq'::regclass))::text);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY rdevents ALTER COLUMN id SET DEFAULT nextval('rdevents_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY redactor_assets ALTER COLUMN id SET DEFAULT nextval('redactor_assets_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY rewards ALTER COLUMN id SET DEFAULT nextval('rewards_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY sendgrid_events ALTER COLUMN id SET DEFAULT nextval('sendgrid_events_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY settings ALTER COLUMN id SET DEFAULT nextval('configurations_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY states ALTER COLUMN id SET DEFAULT nextval('states_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY taggings ALTER COLUMN id SET DEFAULT nextval('taggings_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY tags ALTER COLUMN id SET DEFAULT nextval('tags_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY unsubscribes ALTER COLUMN id SET DEFAULT nextval('unsubscribes_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_links ALTER COLUMN id SET DEFAULT nextval('user_links_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_notifications ALTER COLUMN id SET DEFAULT nextval('user_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_transfer_notifications ALTER COLUMN id SET DEFAULT nextval('user_transfer_notifications_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_transfers ALTER COLUMN id SET DEFAULT nextval('user_transfers_id_seq'::regclass);
+
+
 --
 -- Name: id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
+
+
 SET search_path = temp, pg_catalog;
 
 --
@@ -4412,994 +5574,26 @@ SET search_path = temp, pg_catalog;
 --
 
 ALTER TABLE ONLY workshops ALTER COLUMN id SET DEFAULT nextval('workshops_id_seq'::regclass);
-SET search_path = api_updates, pg_catalog;
 
---
--- Name: contributions_pkey; Type: CONSTRAINT; Schema: api_updates; Owner: -
---
 
-ALTER TABLE ONLY contributions
-    ADD CONSTRAINT contributions_pkey PRIMARY KEY (transaction_id, updated_at);
 SET search_path = public, pg_catalog;
 
---
--- Name: authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY authorizations
-    ADD CONSTRAINT authorizations_pkey PRIMARY KEY (id);
---
--- Name: backers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY contributions
-    ADD CONSTRAINT backers_pkey PRIMARY KEY (id);
---
--- Name: bank_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY bank_accounts
-    ADD CONSTRAINT bank_accounts_pkey PRIMARY KEY (id);
---
--- Name: banks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY banks
-    ADD CONSTRAINT banks_pkey PRIMARY KEY (id);
---
--- Name: categories_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY categories
-    ADD CONSTRAINT categories_name_unique UNIQUE (name_pt);
 --
 -- Name: categories_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY categories
     ADD CONSTRAINT categories_pkey PRIMARY KEY (id);
---
--- Name: category_followers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY category_followers
-    ADD CONSTRAINT category_followers_pkey PRIMARY KEY (id);
---
--- Name: category_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
 
-ALTER TABLE ONLY category_notifications
-    ADD CONSTRAINT category_notifications_pkey PRIMARY KEY (id);
---
--- Name: channel_partners_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channel_partners
-    ADD CONSTRAINT channel_partners_pkey PRIMARY KEY (id);
---
--- Name: channel_post_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channel_post_notifications
-    ADD CONSTRAINT channel_post_notifications_pkey PRIMARY KEY (id);
---
--- Name: channel_posts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channel_posts
-    ADD CONSTRAINT channel_posts_pkey PRIMARY KEY (id);
---
--- Name: channel_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channels
-    ADD CONSTRAINT channel_profiles_pkey PRIMARY KEY (id);
---
--- Name: channels_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channels_projects
-    ADD CONSTRAINT channels_projects_pkey PRIMARY KEY (id);
---
--- Name: channels_subscribers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY channels_subscribers
-    ADD CONSTRAINT channels_subscribers_pkey PRIMARY KEY (id);
---
--- Name: cities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY cities
-    ADD CONSTRAINT cities_pkey PRIMARY KEY (id);
---
--- Name: configurations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY settings
-    ADD CONSTRAINT configurations_pkey PRIMARY KEY (id);
---
--- Name: contribution_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY contribution_notifications
-    ADD CONSTRAINT contribution_notifications_pkey PRIMARY KEY (id);
---
--- Name: countries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY countries
-    ADD CONSTRAINT countries_pkey PRIMARY KEY (id);
---
--- Name: credit_cards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY credit_cards
-    ADD CONSTRAINT credit_cards_pkey PRIMARY KEY (id);
---
--- Name: dbhero_dataclips_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY dbhero_dataclips
-    ADD CONSTRAINT dbhero_dataclips_pkey PRIMARY KEY (id);
---
--- Name: deps_saved_ddl_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY deps_saved_ddl
-    ADD CONSTRAINT deps_saved_ddl_pkey PRIMARY KEY (deps_id);
---
--- Name: donation_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY donation_notifications
-    ADD CONSTRAINT donation_notifications_pkey PRIMARY KEY (id);
---
--- Name: donations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY donations
-    ADD CONSTRAINT donations_pkey PRIMARY KEY (id);
---
--- Name: flexible_project_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY flexible_project_states
-    ADD CONSTRAINT flexible_project_states_pkey PRIMARY KEY (state);
---
--- Name: flexible_project_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY flexible_project_transitions
-    ADD CONSTRAINT flexible_project_transitions_pkey PRIMARY KEY (id);
---
--- Name: flexible_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY flexible_projects
-    ADD CONSTRAINT flexible_projects_pkey PRIMARY KEY (id);
---
--- Name: near_mes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY near_mes
-    ADD CONSTRAINT near_mes_pkey PRIMARY KEY (id);
---
--- Name: oauth_providers_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY oauth_providers
-    ADD CONSTRAINT oauth_providers_name_unique UNIQUE (name);
---
--- Name: oauth_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY oauth_providers
-    ADD CONSTRAINT oauth_providers_pkey PRIMARY KEY (id);
---
--- Name: origins_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY origins
-    ADD CONSTRAINT origins_pkey PRIMARY KEY (id);
---
--- Name: payment_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY payment_logs
-    ADD CONSTRAINT payment_logs_pkey PRIMARY KEY (id);
---
--- Name: payment_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY payment_notifications
-    ADD CONSTRAINT payment_notifications_pkey PRIMARY KEY (id);
---
--- Name: payment_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY payment_transfers
-    ADD CONSTRAINT payment_transfers_pkey PRIMARY KEY (id);
---
--- Name: payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY payments
-    ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
---
--- Name: project_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_accounts
-    ADD CONSTRAINT project_accounts_pkey PRIMARY KEY (id);
---
--- Name: project_budgets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_budgets
-    ADD CONSTRAINT project_budgets_pkey PRIMARY KEY (id);
---
--- Name: project_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_notifications
-    ADD CONSTRAINT project_notifications_pkey PRIMARY KEY (id);
---
--- Name: project_post_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_post_notifications
-    ADD CONSTRAINT project_post_notifications_pkey PRIMARY KEY (id);
---
--- Name: project_reminders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_reminders
-    ADD CONSTRAINT project_reminders_pkey PRIMARY KEY (id);
---
--- Name: project_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_states
-    ADD CONSTRAINT project_states_pkey PRIMARY KEY (state);
---
--- Name: project_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_transitions
-    ADD CONSTRAINT project_transitions_pkey PRIMARY KEY (id);
---
--- Name: projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY projects
-    ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
---
--- Name: redactor_assets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY redactor_assets
-    ADD CONSTRAINT redactor_assets_pkey PRIMARY KEY (id);
---
--- Name: rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY rewards
-    ADD CONSTRAINT rewards_pkey PRIMARY KEY (id);
---
--- Name: sendgrid_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY sendgrid_events
-    ADD CONSTRAINT sendgrid_events_pkey PRIMARY KEY (id);
---
--- Name: states_acronym_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY states
-    ADD CONSTRAINT states_acronym_unique UNIQUE (acronym);
---
--- Name: states_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY states
-    ADD CONSTRAINT states_name_unique UNIQUE (name);
---
--- Name: states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY states
-    ADD CONSTRAINT states_pkey PRIMARY KEY (id);
---
--- Name: taggings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY taggings
-    ADD CONSTRAINT taggings_pkey PRIMARY KEY (id);
---
--- Name: tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY tags
-    ADD CONSTRAINT tags_pkey PRIMARY KEY (id);
---
--- Name: unsubscribes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY unsubscribes
-    ADD CONSTRAINT unsubscribes_pkey PRIMARY KEY (id);
---
--- Name: updates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY project_posts
-    ADD CONSTRAINT updates_pkey PRIMARY KEY (id);
---
--- Name: user_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY user_links
-    ADD CONSTRAINT user_links_pkey PRIMARY KEY (id);
---
--- Name: user_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY user_notifications
-    ADD CONSTRAINT user_notifications_pkey PRIMARY KEY (id);
---
--- Name: user_transfer_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY user_transfer_notifications
-    ADD CONSTRAINT user_transfer_notifications_pkey PRIMARY KEY (id);
---
--- Name: user_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY user_transfers
-    ADD CONSTRAINT user_transfers_pkey PRIMARY KEY (id);
---
--- Name: users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY users
-    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-SET search_path = temp, pg_catalog;
-
---
--- Name: moip_jan_2014_backers_key_key; Type: CONSTRAINT; Schema: temp; Owner: -
---
-
-ALTER TABLE ONLY moip_jan_2014_backers
-    ADD CONSTRAINT moip_jan_2014_backers_key_key UNIQUE (key);
---
--- Name: paypal_dez_2013_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -
---
-
-ALTER TABLE ONLY paypal_dez_2013_backers
-    ADD CONSTRAINT paypal_dez_2013_backers_payment_id_key UNIQUE (payment_id);
---
--- Name: paypal_jan_2014_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -
---
-
-ALTER TABLE ONLY paypal_jan_2014_backers
-    ADD CONSTRAINT paypal_jan_2014_backers_payment_id_key UNIQUE (payment_id);
---
--- Name: workshops_pkey; Type: CONSTRAINT; Schema: temp; Owner: -
---
-
-ALTER TABLE ONLY workshops
-    ADD CONSTRAINT workshops_pkey PRIMARY KEY (id);
 SET search_path = "1", pg_catalog;
 
 --
--- Name: statistics_total_users_idx; Type: INDEX; Schema: 1; Owner: -
+-- Name: category_totals; Type: MATERIALIZED VIEW; Schema: 1; Owner: -
 --
 
-CREATE UNIQUE INDEX statistics_total_users_idx ON statistics USING btree (total_users);
---
--- Name: user_totals_id_idx; Type: INDEX; Schema: 1; Owner: -
---
-
-CREATE INDEX user_totals_id_idx ON user_totals USING btree (id);
-SET search_path = public, pg_catalog;
-
---
--- Name: fk__authorizations_oauth_provider_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__authorizations_oauth_provider_id ON authorizations USING btree (oauth_provider_id);
---
--- Name: fk__authorizations_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__authorizations_user_id ON authorizations USING btree (user_id);
---
--- Name: fk__bank_accounts_bank_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__bank_accounts_bank_id ON bank_accounts USING btree (bank_id);
---
--- Name: fk__bank_accounts_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__bank_accounts_user_id ON bank_accounts USING btree (user_id);
---
--- Name: fk__category_followers_category_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__category_followers_category_id ON category_followers USING btree (category_id);
---
--- Name: fk__category_followers_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__category_followers_user_id ON category_followers USING btree (user_id);
---
--- Name: fk__category_notifications_category_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__category_notifications_category_id ON category_notifications USING btree (category_id);
---
--- Name: fk__category_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__category_notifications_user_id ON category_notifications USING btree (user_id);
---
--- Name: fk__channel_partners_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channel_partners_channel_id ON channel_partners USING btree (channel_id);
---
--- Name: fk__channel_post_notifications_channel_post_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channel_post_notifications_channel_post_id ON channel_post_notifications USING btree (channel_post_id);
---
--- Name: fk__channel_post_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channel_post_notifications_user_id ON channel_post_notifications USING btree (user_id);
---
--- Name: fk__channel_posts_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channel_posts_channel_id ON channel_posts USING btree (channel_id);
---
--- Name: fk__channel_posts_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channel_posts_user_id ON channel_posts USING btree (user_id);
---
--- Name: fk__channels_subscribers_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channels_subscribers_channel_id ON channels_subscribers USING btree (channel_id);
---
--- Name: fk__channels_subscribers_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__channels_subscribers_user_id ON channels_subscribers USING btree (user_id);
---
--- Name: fk__cities_state_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__cities_state_id ON cities USING btree (state_id);
---
--- Name: fk__contribution_notifications_contribution_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__contribution_notifications_contribution_id ON contribution_notifications USING btree (contribution_id);
---
--- Name: fk__contribution_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__contribution_notifications_user_id ON contribution_notifications USING btree (user_id);
---
--- Name: fk__contributions_country_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__contributions_country_id ON contributions USING btree (country_id);
---
--- Name: fk__contributions_donation_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__contributions_donation_id ON contributions USING btree (donation_id);
---
--- Name: fk__contributions_origin_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__contributions_origin_id ON contributions USING btree (origin_id);
---
--- Name: fk__credit_cards_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__credit_cards_user_id ON credit_cards USING btree (user_id);
---
--- Name: fk__donation_notifications_donation_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__donation_notifications_donation_id ON donation_notifications USING btree (donation_id);
---
--- Name: fk__donation_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__donation_notifications_user_id ON donation_notifications USING btree (user_id);
---
--- Name: fk__flexible_project_transitions_flexible_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__flexible_project_transitions_flexible_project_id ON flexible_project_transitions USING btree (flexible_project_id);
---
--- Name: fk__flexible_projects_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__flexible_projects_project_id ON flexible_projects USING btree (project_id);
---
--- Name: fk__payment_notifications_payment_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__payment_notifications_payment_id ON payment_notifications USING btree (payment_id);
---
--- Name: fk__payment_transfers_payment_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__payment_transfers_payment_id ON payment_transfers USING btree (payment_id);
---
--- Name: fk__payment_transfers_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__payment_transfers_user_id ON payment_transfers USING btree (user_id);
---
--- Name: fk__payments_contribution_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__payments_contribution_id ON payments USING btree (contribution_id);
---
--- Name: fk__project_accounts_bank_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_accounts_bank_id ON project_accounts USING btree (bank_id);
---
--- Name: fk__project_budgets_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_budgets_project_id ON project_budgets USING btree (project_id);
---
--- Name: fk__project_notifications_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_notifications_project_id ON project_notifications USING btree (project_id);
---
--- Name: fk__project_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_notifications_user_id ON project_notifications USING btree (user_id);
---
--- Name: fk__project_post_notifications_project_post_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_post_notifications_project_post_id ON project_post_notifications USING btree (project_post_id);
---
--- Name: fk__project_post_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_post_notifications_user_id ON project_post_notifications USING btree (user_id);
---
--- Name: fk__project_reminders_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_reminders_project_id ON project_reminders USING btree (project_id);
---
--- Name: fk__project_reminders_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_reminders_user_id ON project_reminders USING btree (user_id);
---
--- Name: fk__project_transitions_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__project_transitions_project_id ON project_transitions USING btree (project_id);
---
--- Name: fk__projects_origin_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__projects_origin_id ON projects USING btree (origin_id);
---
--- Name: fk__redactor_assets_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__redactor_assets_user_id ON redactor_assets USING btree (user_id);
---
--- Name: fk__taggings_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__taggings_project_id ON taggings USING btree (project_id);
---
--- Name: fk__taggings_tag_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__taggings_tag_id ON taggings USING btree (tag_id);
---
--- Name: fk__user_links_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__user_links_user_id ON user_links USING btree (user_id);
---
--- Name: fk__user_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__user_notifications_user_id ON user_notifications USING btree (user_id);
---
--- Name: fk__user_transfer_notifications_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__user_transfer_notifications_user_id ON user_transfer_notifications USING btree (user_id);
---
--- Name: fk__user_transfer_notifications_user_transfer_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__user_transfer_notifications_user_transfer_id ON user_transfer_notifications USING btree (user_transfer_id);
---
--- Name: fk__user_transfers_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__user_transfers_user_id ON user_transfers USING btree (user_id);
---
--- Name: fk__users_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__users_channel_id ON users USING btree (channel_id);
---
--- Name: fk__users_country_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX fk__users_country_id ON users USING btree (country_id);
---
--- Name: flexible_project_transitions_flexible_project_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX flexible_project_transitions_flexible_project_id_idx ON flexible_project_transitions USING btree (flexible_project_id) WHERE most_recent;
---
--- Name: idx_redactor_assetable; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_redactor_assetable ON redactor_assets USING btree (assetable_type, assetable_id);
---
--- Name: idx_redactor_assetable_type; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_redactor_assetable_type ON redactor_assets USING btree (assetable_type, type, assetable_id);
---
--- Name: index_authorizations_on_oauth_provider_id_and_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_authorizations_on_oauth_provider_id_and_user_id ON authorizations USING btree (oauth_provider_id, user_id);
---
--- Name: index_authorizations_on_uid_and_oauth_provider_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_authorizations_on_uid_and_oauth_provider_id ON authorizations USING btree (uid, oauth_provider_id);
---
--- Name: index_bank_accounts_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_bank_accounts_on_user_id ON bank_accounts USING btree (user_id);
---
--- Name: index_banks_on_code; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_banks_on_code ON banks USING btree (code);
---
--- Name: index_categories_on_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_categories_on_name ON categories USING btree (name_pt);
---
--- Name: index_category_followers_on_category_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_category_followers_on_category_id ON category_followers USING btree (category_id);
---
--- Name: index_category_followers_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_category_followers_on_user_id ON category_followers USING btree (user_id);
---
--- Name: index_channel_posts_on_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_channel_posts_on_channel_id ON channel_posts USING btree (channel_id);
---
--- Name: index_channel_posts_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_channel_posts_on_user_id ON channel_posts USING btree (user_id);
---
--- Name: index_channels_on_permalink; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_channels_on_permalink ON channels USING btree (permalink);
---
--- Name: index_channels_projects_on_channel_id_and_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_channels_projects_on_channel_id_and_project_id ON channels_projects USING btree (channel_id, project_id);
---
--- Name: index_channels_projects_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_channels_projects_on_project_id ON channels_projects USING btree (project_id);
---
--- Name: index_channels_subscribers_on_user_id_and_channel_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_channels_subscribers_on_user_id_and_channel_id ON channels_subscribers USING btree (user_id, channel_id);
---
--- Name: index_configurations_on_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_configurations_on_name ON settings USING btree (name);
---
--- Name: index_contributions_on_created_at; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_contributions_on_created_at ON contributions USING btree (created_at);
---
--- Name: index_contributions_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_contributions_on_project_id ON contributions USING btree (project_id);
---
--- Name: index_contributions_on_reward_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_contributions_on_reward_id ON contributions USING btree (reward_id);
---
--- Name: index_contributions_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_contributions_on_user_id ON contributions USING btree (user_id);
---
--- Name: index_credit_cards_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_credit_cards_on_user_id ON credit_cards USING btree (user_id);
---
--- Name: index_dbhero_dataclips_on_token; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_dbhero_dataclips_on_token ON dbhero_dataclips USING btree (token);
---
--- Name: index_dbhero_dataclips_on_user; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_dbhero_dataclips_on_user ON dbhero_dataclips USING btree ("user");
---
--- Name: index_donations_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_donations_on_user_id ON donations USING btree (user_id);
---
--- Name: index_flexible_project_transitions_parent_sort; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_flexible_project_transitions_parent_sort ON flexible_project_transitions USING btree (flexible_project_id, sort_key);
---
--- Name: index_flexible_projects_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_flexible_projects_on_project_id ON flexible_projects USING btree (project_id);
---
--- Name: index_origins_on_domain_and_referral; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_origins_on_domain_and_referral ON origins USING btree (domain, referral);
---
--- Name: index_payment_notifications_on_contribution_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_payment_notifications_on_contribution_id ON payment_notifications USING btree (contribution_id);
---
--- Name: index_payments_on_key; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_payments_on_key ON payments USING btree (key);
---
--- Name: index_project_accounts_on_bank_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_project_accounts_on_bank_id ON project_accounts USING btree (bank_id);
---
--- Name: index_project_accounts_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_project_accounts_on_project_id ON project_accounts USING btree (project_id);
---
--- Name: index_project_reminders_on_user_id_and_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_project_reminders_on_user_id_and_project_id ON project_reminders USING btree (user_id, project_id);
---
--- Name: index_project_transitions_parent_sort; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_project_transitions_parent_sort ON project_transitions USING btree (project_id, sort_key);
---
--- Name: index_projects_on_category_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_projects_on_category_id ON projects USING btree (category_id);
---
--- Name: index_projects_on_city_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_projects_on_city_id ON projects USING btree (city_id);
---
--- Name: index_projects_on_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_projects_on_name ON projects USING btree (name);
---
--- Name: index_projects_on_permalink; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_projects_on_permalink ON projects USING btree (lower(permalink));
---
--- Name: index_projects_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_projects_on_user_id ON projects USING btree (user_id);
---
--- Name: index_rewards_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_rewards_on_project_id ON rewards USING btree (project_id);
---
--- Name: index_taggings_on_tag_id_and_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_taggings_on_tag_id_and_project_id ON taggings USING btree (tag_id, project_id);
---
--- Name: index_tags_on_slug; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_tags_on_slug ON tags USING btree (slug);
---
--- Name: index_unsubscribes_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_unsubscribes_on_project_id ON unsubscribes USING btree (project_id);
---
--- Name: index_unsubscribes_on_user_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_unsubscribes_on_user_id ON unsubscribes USING btree (user_id);
---
--- Name: index_updates_on_project_id; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_updates_on_project_id ON project_posts USING btree (project_id);
---
--- Name: index_users_on_authentication_token; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_users_on_authentication_token ON users USING btree (authentication_token);
---
--- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_users_on_email ON users USING btree (email);
---
--- Name: index_users_on_name; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX index_users_on_name ON users USING btree (name);
---
--- Name: index_users_on_permalink; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_users_on_permalink ON users USING btree (permalink);
---
--- Name: index_users_on_reset_password_token; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX index_users_on_reset_password_token ON users USING btree (reset_password_token);
---
--- Name: online_projects_id_ix; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX online_projects_id_ix ON projects USING btree (id) WHERE ((state)::text = 'online'::text);
---
--- Name: payments_created_at_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX payments_created_at_idx ON payments USING btree (created_at);
---
--- Name: payments_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX payments_full_text_index_ix ON payments USING gin (full_text_index);
---
--- Name: payments_gateway_id_gateway_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX payments_gateway_id_gateway_idx ON payments USING btree (gateway_id, gateway);
---
--- Name: payments_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX payments_id_idx ON payments USING btree (id DESC);
---
--- Name: project_transitions_project_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX project_transitions_project_id_idx ON project_transitions USING btree (project_id) WHERE most_recent;
---
--- Name: projects_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX projects_full_text_index_ix ON projects USING gin (full_text_index);
---
--- Name: projects_name_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX projects_name_idx ON projects USING gist (name gist_trgm_ops);
---
--- Name: unique_schema_migrations; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX unique_schema_migrations ON schema_migrations USING btree (version);
---
--- Name: user_admin_id_ix; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX user_admin_id_ix ON users USING btree (id) WHERE admin;
---
--- Name: users_deactivated_at_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX users_deactivated_at_idx ON users USING btree (deactivated_at);
---
--- Name: users_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX users_full_text_index_ix ON users USING gin (full_text_index);
---
--- Name: users_id_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX users_id_idx ON users USING btree (id DESC);
-SET search_path = temp, pg_catalog;
-
---
--- Name: workshops_email_workshop_idx; Type: INDEX; Schema: temp; Owner: -
---
-
-CREATE UNIQUE INDEX workshops_email_workshop_idx ON workshops USING btree (email, workshop);
-SET search_path = "1", pg_catalog;
-
---
--- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
---
-
-CREATE RULE "_RETURN" AS
-    ON SELECT TO project_totals DO INSTEAD  SELECT c.project_id,
-    sum(p.value) AS pledged,
-    ((sum(p.value) / projects.goal) * (100)::numeric) AS progress,
-    sum(p.gateway_fee) AS total_payment_service_fee,
-    count(DISTINCT c.id) AS total_contributions,
-    count(DISTINCT c.user_id) AS total_contributors
-   FROM ((public.contributions c
-     JOIN public.projects ON ((c.project_id = projects.id)))
-     JOIN public.payments p ON ((p.contribution_id = c.id)))
-  WHERE (p.state = ANY (public.confirmed_states()))
-  GROUP BY c.project_id, projects.id;
---
--- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
---
-
-CREATE RULE "_RETURN" AS
-    ON SELECT TO category_totals DO INSTEAD  WITH project_stats AS (
+CREATE MATERIALIZED VIEW category_totals AS
+ WITH project_stats AS (
          SELECT ca.id AS category_id,
             ca.name_pt AS name,
             count(DISTINCT p_1.id) FILTER (WHERE ((p_1.state)::text = 'online'::text)) AS online_projects,
@@ -5446,7 +5640,1451 @@ CREATE RULE "_RETURN" AS
     cf.followers
    FROM ((project_stats p
      JOIN contribution_stats c USING (category_id))
-     LEFT JOIN followers cf USING (category_id));
+     LEFT JOIN followers cf USING (category_id))
+  WITH NO DATA;
+
+
+SET search_path = api_updates, pg_catalog;
+
+--
+-- Name: contributions_pkey; Type: CONSTRAINT; Schema: api_updates; Owner: -
+--
+
+ALTER TABLE ONLY contributions
+    ADD CONSTRAINT contributions_pkey PRIMARY KEY (transaction_id, updated_at);
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY authorizations
+    ADD CONSTRAINT authorizations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: backers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY contributions
+    ADD CONSTRAINT backers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: balance_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT balance_transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: balance_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transfers
+    ADD CONSTRAINT balance_transfers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bank_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY bank_accounts
+    ADD CONSTRAINT bank_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: banks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY banks
+    ADD CONSTRAINT banks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: categories_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY categories
+    ADD CONSTRAINT categories_name_unique UNIQUE (name_pt);
+
+
+--
+-- Name: category_followers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_followers
+    ADD CONSTRAINT category_followers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: category_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY category_notifications
+    ADD CONSTRAINT category_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channel_partners_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channel_partners
+    ADD CONSTRAINT channel_partners_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channel_post_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channel_post_notifications
+    ADD CONSTRAINT channel_post_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channel_posts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channel_posts
+    ADD CONSTRAINT channel_posts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channel_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channels
+    ADD CONSTRAINT channel_profiles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channels_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channels_projects
+    ADD CONSTRAINT channels_projects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channels_subscribers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY channels_subscribers
+    ADD CONSTRAINT channels_subscribers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY cities
+    ADD CONSTRAINT cities_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: configurations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY settings
+    ADD CONSTRAINT configurations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: contribution_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY contribution_notifications
+    ADD CONSTRAINT contribution_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: countries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY countries
+    ADD CONSTRAINT countries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: credit_cards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY credit_cards
+    ADD CONSTRAINT credit_cards_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: dbhero_dataclips_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY dbhero_dataclips
+    ADD CONSTRAINT dbhero_dataclips_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: deps_saved_ddl_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY deps_saved_ddl
+    ADD CONSTRAINT deps_saved_ddl_pkey PRIMARY KEY (deps_id);
+
+
+--
+-- Name: donation_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY donation_notifications
+    ADD CONSTRAINT donation_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: donations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY donations
+    ADD CONSTRAINT donations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: flexible_project_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY flexible_project_states
+    ADD CONSTRAINT flexible_project_states_pkey PRIMARY KEY (state);
+
+
+--
+-- Name: flexible_project_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY flexible_project_transitions
+    ADD CONSTRAINT flexible_project_transitions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: flexible_projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY flexible_projects
+    ADD CONSTRAINT flexible_projects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: near_mes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY near_mes
+    ADD CONSTRAINT near_mes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: oauth_providers_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY oauth_providers
+    ADD CONSTRAINT oauth_providers_name_unique UNIQUE (name);
+
+
+--
+-- Name: oauth_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY oauth_providers
+    ADD CONSTRAINT oauth_providers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: origins_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY origins
+    ADD CONSTRAINT origins_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY payment_logs
+    ADD CONSTRAINT payment_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY payment_notifications
+    ADD CONSTRAINT payment_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY payment_transfers
+    ADD CONSTRAINT payment_transfers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY payments
+    ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_accounts
+    ADD CONSTRAINT project_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_budgets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_budgets
+    ADD CONSTRAINT project_budgets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_errors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT project_errors_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_notifications
+    ADD CONSTRAINT project_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_post_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_post_notifications
+    ADD CONSTRAINT project_post_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_reminders_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_reminders
+    ADD CONSTRAINT project_reminders_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: project_states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_states
+    ADD CONSTRAINT project_states_pkey PRIMARY KEY (state);
+
+
+--
+-- Name: project_transitions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_transitions
+    ADD CONSTRAINT project_transitions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: projects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY projects
+    ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rdevents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY rdevents
+    ADD CONSTRAINT rdevents_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: redactor_assets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY redactor_assets
+    ADD CONSTRAINT redactor_assets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: rewards_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY rewards
+    ADD CONSTRAINT rewards_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sendgrid_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY sendgrid_events
+    ADD CONSTRAINT sendgrid_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: states_acronym_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY states
+    ADD CONSTRAINT states_acronym_unique UNIQUE (acronym);
+
+
+--
+-- Name: states_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY states
+    ADD CONSTRAINT states_name_unique UNIQUE (name);
+
+
+--
+-- Name: states_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY states
+    ADD CONSTRAINT states_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: taggings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY taggings
+    ADD CONSTRAINT taggings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tags_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY tags
+    ADD CONSTRAINT tags_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: unsubscribes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY unsubscribes
+    ADD CONSTRAINT unsubscribes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: updates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_posts
+    ADD CONSTRAINT updates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY user_links
+    ADD CONSTRAINT user_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY user_notifications
+    ADD CONSTRAINT user_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_transfer_notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY user_transfer_notifications
+    ADD CONSTRAINT user_transfer_notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: user_transfers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY user_transfers
+    ADD CONSTRAINT user_transfers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+SET search_path = temp, pg_catalog;
+
+--
+-- Name: moip_jan_2014_backers_key_key; Type: CONSTRAINT; Schema: temp; Owner: -
+--
+
+ALTER TABLE ONLY moip_jan_2014_backers
+    ADD CONSTRAINT moip_jan_2014_backers_key_key UNIQUE (key);
+
+
+--
+-- Name: paypal_dez_2013_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -
+--
+
+ALTER TABLE ONLY paypal_dez_2013_backers
+    ADD CONSTRAINT paypal_dez_2013_backers_payment_id_key UNIQUE (payment_id);
+
+
+--
+-- Name: paypal_jan_2014_backers_payment_id_key; Type: CONSTRAINT; Schema: temp; Owner: -
+--
+
+ALTER TABLE ONLY paypal_jan_2014_backers
+    ADD CONSTRAINT paypal_jan_2014_backers_payment_id_key UNIQUE (payment_id);
+
+
+--
+-- Name: workshops_pkey; Type: CONSTRAINT; Schema: temp; Owner: -
+--
+
+ALTER TABLE ONLY workshops
+    ADD CONSTRAINT workshops_pkey PRIMARY KEY (id);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: category_totals_category_id_idx; Type: INDEX; Schema: 1; Owner: -
+--
+
+CREATE UNIQUE INDEX category_totals_category_id_idx ON category_totals USING btree (category_id);
+
+
+--
+-- Name: statistics_total_users_idx; Type: INDEX; Schema: 1; Owner: -
+--
+
+CREATE UNIQUE INDEX statistics_total_users_idx ON statistics USING btree (total_users);
+
+
+--
+-- Name: user_totals_id_idx; Type: INDEX; Schema: 1; Owner: -
+--
+
+CREATE INDEX user_totals_id_idx ON user_totals USING btree (id);
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: event_contribution_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX event_contribution_uidx ON balance_transactions USING btree (contribution_id, event_name, user_id);
+
+
+--
+-- Name: event_project_uidx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX event_project_uidx ON balance_transactions USING btree (project_id, event_name, user_id);
+
+
+--
+-- Name: fk__authorizations_oauth_provider_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__authorizations_oauth_provider_id ON authorizations USING btree (oauth_provider_id);
+
+
+--
+-- Name: fk__authorizations_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__authorizations_user_id ON authorizations USING btree (user_id);
+
+
+--
+-- Name: fk__balance_transactions_balance_transfer_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__balance_transactions_balance_transfer_id ON balance_transactions USING btree (balance_transfer_id);
+
+
+--
+-- Name: fk__balance_transactions_contribution_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__balance_transactions_contribution_id ON balance_transactions USING btree (contribution_id);
+
+
+--
+-- Name: fk__balance_transactions_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__balance_transactions_project_id ON balance_transactions USING btree (project_id);
+
+
+--
+-- Name: fk__balance_transactions_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__balance_transactions_user_id ON balance_transactions USING btree (user_id);
+
+
+--
+-- Name: fk__balance_transfers_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__balance_transfers_user_id ON balance_transfers USING btree (user_id);
+
+
+--
+-- Name: fk__bank_accounts_bank_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__bank_accounts_bank_id ON bank_accounts USING btree (bank_id);
+
+
+--
+-- Name: fk__bank_accounts_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__bank_accounts_user_id ON bank_accounts USING btree (user_id);
+
+
+--
+-- Name: fk__category_followers_category_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__category_followers_category_id ON category_followers USING btree (category_id);
+
+
+--
+-- Name: fk__category_followers_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__category_followers_user_id ON category_followers USING btree (user_id);
+
+
+--
+-- Name: fk__category_notifications_category_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__category_notifications_category_id ON category_notifications USING btree (category_id);
+
+
+--
+-- Name: fk__category_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__category_notifications_user_id ON category_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__channel_partners_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channel_partners_channel_id ON channel_partners USING btree (channel_id);
+
+
+--
+-- Name: fk__channel_post_notifications_channel_post_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channel_post_notifications_channel_post_id ON channel_post_notifications USING btree (channel_post_id);
+
+
+--
+-- Name: fk__channel_post_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channel_post_notifications_user_id ON channel_post_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__channel_posts_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channel_posts_channel_id ON channel_posts USING btree (channel_id);
+
+
+--
+-- Name: fk__channel_posts_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channel_posts_user_id ON channel_posts USING btree (user_id);
+
+
+--
+-- Name: fk__channels_subscribers_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channels_subscribers_channel_id ON channels_subscribers USING btree (channel_id);
+
+
+--
+-- Name: fk__channels_subscribers_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__channels_subscribers_user_id ON channels_subscribers USING btree (user_id);
+
+
+--
+-- Name: fk__cities_state_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__cities_state_id ON cities USING btree (state_id);
+
+
+--
+-- Name: fk__contribution_notifications_contribution_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__contribution_notifications_contribution_id ON contribution_notifications USING btree (contribution_id);
+
+
+--
+-- Name: fk__contribution_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__contribution_notifications_user_id ON contribution_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__contributions_country_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__contributions_country_id ON contributions USING btree (country_id);
+
+
+--
+-- Name: fk__contributions_donation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__contributions_donation_id ON contributions USING btree (donation_id);
+
+
+--
+-- Name: fk__contributions_origin_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__contributions_origin_id ON contributions USING btree (origin_id);
+
+
+--
+-- Name: fk__credit_cards_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__credit_cards_user_id ON credit_cards USING btree (user_id);
+
+
+--
+-- Name: fk__donation_notifications_donation_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__donation_notifications_donation_id ON donation_notifications USING btree (donation_id);
+
+
+--
+-- Name: fk__donation_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__donation_notifications_user_id ON donation_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__flexible_project_transitions_flexible_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__flexible_project_transitions_flexible_project_id ON flexible_project_transitions USING btree (flexible_project_id);
+
+
+--
+-- Name: fk__flexible_projects_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__flexible_projects_project_id ON flexible_projects USING btree (project_id);
+
+
+--
+-- Name: fk__payment_notifications_payment_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__payment_notifications_payment_id ON payment_notifications USING btree (payment_id);
+
+
+--
+-- Name: fk__payment_transfers_payment_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__payment_transfers_payment_id ON payment_transfers USING btree (payment_id);
+
+
+--
+-- Name: fk__payment_transfers_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__payment_transfers_user_id ON payment_transfers USING btree (user_id);
+
+
+--
+-- Name: fk__payments_contribution_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__payments_contribution_id ON payments USING btree (contribution_id);
+
+
+--
+-- Name: fk__project_accounts_bank_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_accounts_bank_id ON project_accounts USING btree (bank_id);
+
+
+--
+-- Name: fk__project_budgets_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_budgets_project_id ON project_budgets USING btree (project_id);
+
+
+--
+-- Name: fk__project_errors_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_errors_project_id ON project_errors USING btree (project_id);
+
+
+--
+-- Name: fk__project_notifications_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_notifications_project_id ON project_notifications USING btree (project_id);
+
+
+--
+-- Name: fk__project_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_notifications_user_id ON project_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__project_post_notifications_project_post_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_post_notifications_project_post_id ON project_post_notifications USING btree (project_post_id);
+
+
+--
+-- Name: fk__project_post_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_post_notifications_user_id ON project_post_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__project_reminders_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_reminders_project_id ON project_reminders USING btree (project_id);
+
+
+--
+-- Name: fk__project_reminders_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_reminders_user_id ON project_reminders USING btree (user_id);
+
+
+--
+-- Name: fk__project_transitions_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__project_transitions_project_id ON project_transitions USING btree (project_id);
+
+
+--
+-- Name: fk__projects_origin_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__projects_origin_id ON projects USING btree (origin_id);
+
+
+--
+-- Name: fk__rdevents_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__rdevents_project_id ON rdevents USING btree (project_id);
+
+
+--
+-- Name: fk__rdevents_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__rdevents_user_id ON rdevents USING btree (user_id);
+
+
+--
+-- Name: fk__redactor_assets_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__redactor_assets_user_id ON redactor_assets USING btree (user_id);
+
+
+--
+-- Name: fk__taggings_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__taggings_project_id ON taggings USING btree (project_id);
+
+
+--
+-- Name: fk__taggings_tag_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__taggings_tag_id ON taggings USING btree (tag_id);
+
+
+--
+-- Name: fk__user_links_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__user_links_user_id ON user_links USING btree (user_id);
+
+
+--
+-- Name: fk__user_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__user_notifications_user_id ON user_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__user_transfer_notifications_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__user_transfer_notifications_user_id ON user_transfer_notifications USING btree (user_id);
+
+
+--
+-- Name: fk__user_transfer_notifications_user_transfer_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__user_transfer_notifications_user_transfer_id ON user_transfer_notifications USING btree (user_transfer_id);
+
+
+--
+-- Name: fk__user_transfers_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__user_transfers_user_id ON user_transfers USING btree (user_id);
+
+
+--
+-- Name: fk__users_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__users_channel_id ON users USING btree (channel_id);
+
+
+--
+-- Name: fk__users_country_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fk__users_country_id ON users USING btree (country_id);
+
+
+--
+-- Name: flexible_project_transitions_flexible_project_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX flexible_project_transitions_flexible_project_id_idx ON flexible_project_transitions USING btree (flexible_project_id) WHERE most_recent;
+
+
+--
+-- Name: flexible_project_transitions_flexible_project_id_to_state_c_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX flexible_project_transitions_flexible_project_id_to_state_c_idx ON flexible_project_transitions USING btree (flexible_project_id, to_state, created_at);
+
+
+--
+-- Name: idx_redactor_assetable; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_redactor_assetable ON redactor_assets USING btree (assetable_type, assetable_id);
+
+
+--
+-- Name: idx_redactor_assetable_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_redactor_assetable_type ON redactor_assets USING btree (assetable_type, type, assetable_id);
+
+
+--
+-- Name: index_authorizations_on_oauth_provider_id_and_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_authorizations_on_oauth_provider_id_and_user_id ON authorizations USING btree (oauth_provider_id, user_id);
+
+
+--
+-- Name: index_authorizations_on_uid_and_oauth_provider_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_authorizations_on_uid_and_oauth_provider_id ON authorizations USING btree (uid, oauth_provider_id);
+
+
+--
+-- Name: index_bank_accounts_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_bank_accounts_on_user_id ON bank_accounts USING btree (user_id);
+
+
+--
+-- Name: index_banks_on_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_banks_on_code ON banks USING btree (code);
+
+
+--
+-- Name: index_categories_on_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_categories_on_name ON categories USING btree (name_pt);
+
+
+--
+-- Name: index_category_followers_on_category_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_category_followers_on_category_id ON category_followers USING btree (category_id);
+
+
+--
+-- Name: index_category_followers_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_category_followers_on_user_id ON category_followers USING btree (user_id);
+
+
+--
+-- Name: index_channel_posts_on_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_channel_posts_on_channel_id ON channel_posts USING btree (channel_id);
+
+
+--
+-- Name: index_channel_posts_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_channel_posts_on_user_id ON channel_posts USING btree (user_id);
+
+
+--
+-- Name: index_channels_on_permalink; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_channels_on_permalink ON channels USING btree (permalink);
+
+
+--
+-- Name: index_channels_projects_on_channel_id_and_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_channels_projects_on_channel_id_and_project_id ON channels_projects USING btree (channel_id, project_id);
+
+
+--
+-- Name: index_channels_projects_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_channels_projects_on_project_id ON channels_projects USING btree (project_id);
+
+
+--
+-- Name: index_channels_subscribers_on_user_id_and_channel_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_channels_subscribers_on_user_id_and_channel_id ON channels_subscribers USING btree (user_id, channel_id);
+
+
+--
+-- Name: index_configurations_on_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_configurations_on_name ON settings USING btree (name);
+
+
+--
+-- Name: index_contributions_on_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_contributions_on_created_at ON contributions USING btree (created_at);
+
+
+--
+-- Name: index_contributions_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_contributions_on_project_id ON contributions USING btree (project_id);
+
+
+--
+-- Name: index_contributions_on_reward_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_contributions_on_reward_id ON contributions USING btree (reward_id);
+
+
+--
+-- Name: index_contributions_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_contributions_on_user_id ON contributions USING btree (user_id);
+
+
+--
+-- Name: index_credit_cards_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_credit_cards_on_user_id ON credit_cards USING btree (user_id);
+
+
+--
+-- Name: index_dbhero_dataclips_on_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_dbhero_dataclips_on_token ON dbhero_dataclips USING btree (token);
+
+
+--
+-- Name: index_dbhero_dataclips_on_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_dbhero_dataclips_on_user ON dbhero_dataclips USING btree ("user");
+
+
+--
+-- Name: index_donations_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_donations_on_user_id ON donations USING btree (user_id);
+
+
+--
+-- Name: index_flexible_project_transitions_parent_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_flexible_project_transitions_parent_sort ON flexible_project_transitions USING btree (flexible_project_id, sort_key);
+
+
+--
+-- Name: index_flexible_projects_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_flexible_projects_on_project_id ON flexible_projects USING btree (project_id);
+
+
+--
+-- Name: index_origins_on_domain_and_referral; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_origins_on_domain_and_referral ON origins USING btree (domain, referral);
+
+
+--
+-- Name: index_payment_notifications_on_contribution_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_payment_notifications_on_contribution_id ON payment_notifications USING btree (contribution_id);
+
+
+--
+-- Name: index_payments_on_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_payments_on_key ON payments USING btree (key);
+
+
+--
+-- Name: index_project_accounts_on_bank_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_project_accounts_on_bank_id ON project_accounts USING btree (bank_id);
+
+
+--
+-- Name: index_project_accounts_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_project_accounts_on_project_id ON project_accounts USING btree (project_id);
+
+
+--
+-- Name: index_project_reminders_on_user_id_and_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_project_reminders_on_user_id_and_project_id ON project_reminders USING btree (user_id, project_id);
+
+
+--
+-- Name: index_project_transitions_parent_sort; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_project_transitions_parent_sort ON project_transitions USING btree (project_id, sort_key);
+
+
+--
+-- Name: index_projects_on_category_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_projects_on_category_id ON projects USING btree (category_id);
+
+
+--
+-- Name: index_projects_on_city_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_projects_on_city_id ON projects USING btree (city_id);
+
+
+--
+-- Name: index_projects_on_permalink; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_projects_on_permalink ON projects USING btree (lower(permalink));
+
+
+--
+-- Name: index_projects_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_projects_on_user_id ON projects USING btree (user_id);
+
+
+--
+-- Name: index_rewards_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_rewards_on_project_id ON rewards USING btree (project_id);
+
+
+--
+-- Name: index_taggings_on_tag_id_and_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_taggings_on_tag_id_and_project_id ON taggings USING btree (tag_id, project_id);
+
+
+--
+-- Name: index_tags_on_slug; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_tags_on_slug ON tags USING btree (slug);
+
+
+--
+-- Name: index_unsubscribes_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_unsubscribes_on_project_id ON unsubscribes USING btree (project_id);
+
+
+--
+-- Name: index_unsubscribes_on_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_unsubscribes_on_user_id ON unsubscribes USING btree (user_id);
+
+
+--
+-- Name: index_updates_on_project_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_updates_on_project_id ON project_posts USING btree (project_id);
+
+
+--
+-- Name: index_users_on_authentication_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_authentication_token ON users USING btree (authentication_token);
+
+
+--
+-- Name: index_users_on_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_email ON users USING btree (email);
+
+
+--
+-- Name: index_users_on_name; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX index_users_on_name ON users USING btree (name);
+
+
+--
+-- Name: index_users_on_permalink; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_permalink ON users USING btree (permalink);
+
+
+--
+-- Name: index_users_on_reset_password_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX index_users_on_reset_password_token ON users USING btree (reset_password_token);
+
+
+--
+-- Name: online_projects_id_ix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX online_projects_id_ix ON projects USING btree (id) WHERE ((state)::text = 'online'::text);
+
+
+--
+-- Name: payments_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX payments_full_text_index_ix ON payments USING gin (full_text_index);
+
+
+--
+-- Name: payments_gateway_id_gateway_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX payments_gateway_id_gateway_idx ON payments USING btree (gateway_id, gateway);
+
+
+--
+-- Name: payments_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX payments_id_idx ON payments USING btree (id DESC);
+
+
+--
+-- Name: project_transitions_project_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX project_transitions_project_id_idx ON project_transitions USING btree (project_id) WHERE most_recent;
+
+
+--
+-- Name: project_transitions_project_id_to_state_created_at_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX project_transitions_project_id_to_state_created_at_idx ON project_transitions USING btree (project_id, to_state, created_at);
+
+
+--
+-- Name: projects_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX projects_full_text_index_ix ON projects USING gin (full_text_index);
+
+
+--
+-- Name: projects_name_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX projects_name_idx ON projects USING gist (name gist_trgm_ops);
+
+
+--
+-- Name: teste; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX teste ON contributions USING btree (id, project_id);
+
+
+--
+-- Name: unique_schema_migrations; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX unique_schema_migrations ON schema_migrations USING btree (version);
+
+
+--
+-- Name: user_admin_id_ix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX user_admin_id_ix ON users USING btree (id) WHERE admin;
+
+
+--
+-- Name: users_full_text_index_ix; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX users_full_text_index_ix ON users USING gin (full_text_index);
+
+
+--
+-- Name: users_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX users_id_idx ON users USING btree (id DESC);
+
+
+SET search_path = temp, pg_catalog;
+
+--
+-- Name: workshops_email_workshop_idx; Type: INDEX; Schema: temp; Owner: -
+--
+
+CREATE UNIQUE INDEX workshops_email_workshop_idx ON workshops USING btree (email, workshop);
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
+--
+
+CREATE RULE "_RETURN" AS
+    ON SELECT TO project_totals DO INSTEAD  SELECT c.project_id,
+    sum(p.value) AS pledged,
+    ((sum(p.value) / projects.goal) * (100)::numeric) AS progress,
+    sum(p.gateway_fee) AS total_payment_service_fee,
+    count(DISTINCT c.id) AS total_contributions,
+    count(DISTINCT c.user_id) AS total_contributors
+   FROM ((public.contributions c
+     JOIN public.projects ON ((c.project_id = projects.id)))
+     JOIN public.payments p ON ((p.contribution_id = c.id)))
+  WHERE (p.state = ANY (public.confirmed_states()))
+  GROUP BY c.project_id, projects.id;
+
+
 --
 -- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
 --
@@ -5468,6 +7106,8 @@ CREATE RULE "_RETURN" AS
           GROUP BY p.id, s.acronym, s.name, pt.pledged
           ORDER BY p.created_at DESC) addr_agg
   GROUP BY addr_agg.project_id;
+
+
 --
 -- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
 --
@@ -5500,9 +7140,9 @@ CREATE RULE "_RETURN" AS
     public.state_order(p.*) AS state_order,
     p.expires_at,
     public.zone_timestamp(p.expires_at) AS zone_expires_at,
-    p.online_date,
-    public.zone_timestamp(p.online_date) AS zone_online_date,
-    p.sent_to_analysis_at,
+    public.online_at(p.*) AS online_date,
+    public.zone_timestamp(public.online_at(p.*)) AS zone_online_date,
+    public.zone_timestamp(public.in_analysis_at(p.*)) AS sent_to_analysis_at,
     public.is_published(p.*) AS is_published,
     public.is_expired(p.*) AS is_expired,
     public.open_for_contributions(p.*) AS open_for_contributions,
@@ -5529,7 +7169,9 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.cities ct ON ((ct.id = p.city_id)))
      LEFT JOIN public.states st ON ((st.id = ct.state_id)))
      LEFT JOIN public.project_reminders pr ON ((pr.project_id = p.id)))
-  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, p.sent_to_analysis_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
+  GROUP BY p.id, c.id, u.id, c.name_pt, ct.name, u.address_city, st.acronym, u.address_state, st.name, pt.progress, pt.pledged, pt.total_contributions, p.state, p.expires_at, pt.total_payment_service_fee, fp.state, pt.total_contributors;
+
+
 --
 -- Name: _RETURN; Type: RULE; Schema: 1; Owner: -
 --
@@ -5548,533 +7190,878 @@ CREATE RULE "_RETURN" AS
      LEFT JOIN public.projects p ON ((p.category_id = c.id)))
      LEFT JOIN public.flexible_projects fp ON ((fp.project_id = p.id)))
   GROUP BY c.id;
+
+
+SET search_path = financial, pg_catalog;
+
+--
+-- Name: _RETURN; Type: RULE; Schema: financial; Owner: -
+--
+
+CREATE RULE "_RETURN" AS
+    ON SELECT TO project_metrics_with_generated_series DO INSTEAD  SELECT p.permalink,
+    ct.name_pt AS categoria,
+    p.state,
+    COALESCE(pt.total_contributions, (0)::bigint) AS total_contributions,
+    round((pt.pledged / (pt.total_contributions)::numeric), 2) AS media_apoio,
+    COALESCE(round(pt.progress, 2), (0)::numeric) AS percentual_arrecadado,
+    COALESCE(pt.pledged, (0)::numeric) AS pledged,
+    p.goal,
+    (timezone('America/Sao_Paulo'::text, public.online_at(p.*)))::date AS data_online,
+    (public.zone_expires_at(p.*))::date AS data_expiracao,
+    p.online_days,
+        CASE
+            WHEN (now() > (public.online_at(p.*) + '3 days'::interval)) THEN COALESCE(round(pt.days_3, 2), (0)::numeric)
+            ELSE NULL::numeric
+        END AS "3 dias",
+        CASE
+            WHEN (now() > (public.online_at(p.*) + '7 days'::interval)) THEN COALESCE(round(pt.days_7, 2), (0)::numeric)
+            ELSE NULL::numeric
+        END AS "7 dias",
+        CASE
+            WHEN (now() > (public.online_at(p.*) + ((p.expires_at - public.online_at(p.*)) / (4)::double precision))) THEN COALESCE(round(pt.fst_quarter, 2), (0)::numeric)
+            ELSE NULL::numeric
+        END AS "1 quartil",
+        CASE
+            WHEN (now() > (public.online_at(p.*) + ((p.expires_at - public.online_at(p.*)) / (2)::double precision))) THEN COALESCE(round(pt.fst_half, 2), (0)::numeric)
+            ELSE NULL::numeric
+        END AS metade,
+        CASE
+            WHEN (now() > (public.online_at(p.*) + (((3)::double precision * (p.expires_at - public.online_at(p.*))) / (4)::double precision))) THEN COALESCE(round(pt.trd_quarter, 2), (0)::numeric)
+            ELSE NULL::numeric
+        END AS "3 quartil",
+    ( SELECT count(*) AS count
+           FROM public.project_posts pp
+          WHERE (pp.project_id = p.id)) AS novidades,
+    ( SELECT count(*) AS count
+           FROM public.projects p2
+          WHERE ((p2.user_id = p.user_id) AND (public.state_order(p2.*) >= 'published'::public.project_state_order))) AS projetos_realizdor
+   FROM ((public.projects p
+     JOIN public.categories ct ON ((ct.id = p.category_id)))
+     LEFT JOIN ( SELECT c.project_id,
+            sum(p_1.value) AS pledged,
+            ((sum(p_1.value) / projects.goal) * (100)::numeric) AS progress,
+            count(DISTINCT c.id) AS total_contributions,
+            ((sum(p_1.value) FILTER (WHERE (p_1.paid_at <= (public.online_at(projects.*) + '3 days'::interval))) / projects.goal) * (100)::numeric) AS days_3,
+            ((sum(p_1.value) FILTER (WHERE (p_1.paid_at <= (public.online_at(projects.*) + '7 days'::interval))) / projects.goal) * (100)::numeric) AS days_7,
+            ((sum(p_1.value) FILTER (WHERE (p_1.paid_at <= (public.online_at(projects.*) + ((projects.expires_at - public.online_at(projects.*)) / (4)::double precision)))) / projects.goal) * (100)::numeric) AS fst_quarter,
+            ((sum(p_1.value) FILTER (WHERE (p_1.paid_at <= (public.online_at(projects.*) + ((projects.expires_at - public.online_at(projects.*)) / (2)::double precision)))) / projects.goal) * (100)::numeric) AS fst_half,
+            ((sum(p_1.value) FILTER (WHERE (p_1.paid_at <= (public.online_at(projects.*) + (((3)::double precision * (projects.expires_at - public.online_at(projects.*))) / (4)::double precision)))) / projects.goal) * (100)::numeric) AS trd_quarter
+           FROM ((public.contributions c
+             JOIN public.projects ON ((c.project_id = projects.id)))
+             JOIN public.payments p_1 ON ((p_1.contribution_id = c.id)))
+          WHERE ((p_1.state = ANY (public.confirmed_states())) AND (public.online_at(projects.*) > '2015-10-01'::date) AND (NOT (projects.id IN ( SELECT flexible_projects.project_id
+                   FROM public.flexible_projects
+                  WHERE (flexible_projects.project_id = projects.id)))))
+          GROUP BY c.project_id, projects.id) pt ON ((pt.project_id = p.id)))
+  WHERE (((p.state)::text <> ALL (ARRAY[('draft'::character varying)::text, ('in_analysis'::character varying)::text, ('rejected'::character varying)::text])) AND (public.online_at(p.*) > '2015-10-01'::date) AND (NOT (p.id IN ( SELECT flexible_projects.project_id
+           FROM public.flexible_projects
+          WHERE (flexible_projects.project_id = p.id)))))
+  ORDER BY (date_part('epoch'::text, (now() - (public.online_at(p.*))::timestamp with time zone)) / date_part('epoch'::text, (p.expires_at - public.online_at(p.*))));
+
+
+SET search_path = "1", pg_catalog;
+
 --
 -- Name: delete_category_followers; Type: TRIGGER; Schema: 1; Owner: -
 --
 
 CREATE TRIGGER delete_category_followers INSTEAD OF DELETE ON category_followers FOR EACH ROW EXECUTE PROCEDURE public.delete_category_followers();
+
+
 --
 -- Name: delete_project_reminder; Type: TRIGGER; Schema: 1; Owner: -
 --
 
 CREATE TRIGGER delete_project_reminder INSTEAD OF DELETE ON project_reminders FOR EACH ROW EXECUTE PROCEDURE public.delete_project_reminder();
+
+
+--
+-- Name: insert_balance_transfer; Type: TRIGGER; Schema: 1; Owner: -
+--
+
+CREATE TRIGGER insert_balance_transfer INSTEAD OF INSERT ON balance_transfers FOR EACH ROW EXECUTE PROCEDURE public.insert_balance_transfer();
+
+
 --
 -- Name: insert_category_followers; Type: TRIGGER; Schema: 1; Owner: -
 --
 
 CREATE TRIGGER insert_category_followers INSTEAD OF INSERT ON category_followers FOR EACH ROW EXECUTE PROCEDURE public.insert_category_followers();
+
+
 --
 -- Name: insert_project_reminder; Type: TRIGGER; Schema: 1; Owner: -
 --
 
 CREATE TRIGGER insert_project_reminder INSTEAD OF INSERT ON project_reminders FOR EACH ROW EXECUTE PROCEDURE public.insert_project_reminder();
+
+
 --
 -- Name: update_from_details_to_contributions; Type: TRIGGER; Schema: 1; Owner: -
 --
 
 CREATE TRIGGER update_from_details_to_contributions INSTEAD OF UPDATE ON contribution_details FOR EACH ROW EXECUTE PROCEDURE public.update_from_details_to_contributions();
+
+
 SET search_path = public, pg_catalog;
+
+--
+-- Name: flexible_project_rdevents_dispatcher; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER flexible_project_rdevents_dispatcher AFTER INSERT ON flexible_project_transitions FOR EACH ROW EXECUTE PROCEDURE flexible_project_rdevents_dispatcher();
+
 
 --
 -- Name: notify_about_confirmed_payments; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER notify_about_confirmed_payments AFTER UPDATE OF state ON payments FOR EACH ROW WHEN (((old.state <> 'paid'::text) AND (new.state = 'paid'::text))) EXECUTE PROCEDURE notify_about_confirmed_payments();
+
+
+--
+-- Name: project_rdevents_dispatcher; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER project_rdevents_dispatcher AFTER INSERT ON project_transitions FOR EACH ROW EXECUTE PROCEDURE project_rdevents_dispatcher();
+
+
+--
+-- Name: project_received_conversion; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER project_received_conversion AFTER INSERT ON projects FOR EACH ROW EXECUTE PROCEDURE project_received_conversion();
+
+
+--
+-- Name: rdevents_notifier; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER rdevents_notifier AFTER INSERT ON rdevents FOR EACH ROW EXECUTE PROCEDURE rdevents_notify();
+
+
 --
 -- Name: sent_validation; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE CONSTRAINT TRIGGER sent_validation AFTER INSERT OR UPDATE ON projects NOT DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE PROCEDURE sent_validation();
+
+
 --
 -- Name: update_full_text_index; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_full_text_index BEFORE INSERT OR UPDATE OF name, permalink, headline ON projects FOR EACH ROW EXECUTE PROCEDURE update_full_text_index();
+
+
 --
 -- Name: update_payments_full_text_index; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_payments_full_text_index BEFORE INSERT OR UPDATE OF key, gateway, gateway_id, gateway_data, state ON payments FOR EACH ROW EXECUTE PROCEDURE update_payments_full_text_index();
+
+
 --
 -- Name: update_users_full_text_index; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER update_users_full_text_index BEFORE INSERT OR UPDATE OF id, name, email ON users FOR EACH ROW EXECUTE PROCEDURE update_users_full_text_index();
+
+
 --
 -- Name: validate_project_expires_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER validate_project_expires_at BEFORE INSERT OR UPDATE OF contribution_id ON payments FOR EACH ROW EXECUTE PROCEDURE validate_project_expires_at();
+
+
 --
 -- Name: validate_reward_sold_out; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER validate_reward_sold_out BEFORE INSERT OR UPDATE OF contribution_id ON payments FOR EACH ROW EXECUTE PROCEDURE validate_reward_sold_out();
+
+
 --
 -- Name: contributions_project_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT contributions_project_id_reference FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: contributions_reward_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT contributions_reward_id_reference FOREIGN KEY (reward_id) REFERENCES rewards(id);
+
+
 --
 -- Name: contributions_user_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT contributions_user_id_reference FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_authorizations_oauth_provider_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT fk_authorizations_oauth_provider_id FOREIGN KEY (oauth_provider_id) REFERENCES oauth_providers(id);
+
+
 --
 -- Name: fk_authorizations_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY authorizations
     ADD CONSTRAINT fk_authorizations_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
+-- Name: fk_balance_transactions_balance_transfer_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_balance_transfer_id FOREIGN KEY (balance_transfer_id) REFERENCES balance_transfers(id);
+
+
+--
+-- Name: fk_balance_transactions_contribution_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_contribution_id FOREIGN KEY (contribution_id) REFERENCES contributions(id);
+
+
+--
+-- Name: fk_balance_transactions_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
+-- Name: fk_balance_transactions_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transactions
+    ADD CONSTRAINT fk_balance_transactions_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
+--
+-- Name: fk_balance_transfers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY balance_transfers
+    ADD CONSTRAINT fk_balance_transfers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_bank_accounts_bank_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY bank_accounts
     ADD CONSTRAINT fk_bank_accounts_bank_id FOREIGN KEY (bank_id) REFERENCES banks(id);
+
+
 --
 -- Name: fk_bank_accounts_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY bank_accounts
     ADD CONSTRAINT fk_bank_accounts_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_category_followers_category_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_followers
     ADD CONSTRAINT fk_category_followers_category_id FOREIGN KEY (category_id) REFERENCES categories(id);
+
+
 --
 -- Name: fk_category_followers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_followers
     ADD CONSTRAINT fk_category_followers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_category_notifications_category_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_notifications
     ADD CONSTRAINT fk_category_notifications_category_id FOREIGN KEY (category_id) REFERENCES categories(id);
+
+
 --
 -- Name: fk_category_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY category_notifications
     ADD CONSTRAINT fk_category_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_channel_partners_channel_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_partners
     ADD CONSTRAINT fk_channel_partners_channel_id FOREIGN KEY (channel_id) REFERENCES channels(id);
+
+
 --
 -- Name: fk_channel_post_notifications_channel_post_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_post_notifications
     ADD CONSTRAINT fk_channel_post_notifications_channel_post_id FOREIGN KEY (channel_post_id) REFERENCES channel_posts(id);
+
+
 --
 -- Name: fk_channel_post_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_post_notifications
     ADD CONSTRAINT fk_channel_post_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_channel_posts_channel_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_posts
     ADD CONSTRAINT fk_channel_posts_channel_id FOREIGN KEY (channel_id) REFERENCES channels(id);
+
+
 --
 -- Name: fk_channel_posts_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channel_posts
     ADD CONSTRAINT fk_channel_posts_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_channels_projects_channel_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_projects
     ADD CONSTRAINT fk_channels_projects_channel_id FOREIGN KEY (channel_id) REFERENCES channels(id);
+
+
 --
 -- Name: fk_channels_projects_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_projects
     ADD CONSTRAINT fk_channels_projects_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_channels_subscribers_channel_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_subscribers
     ADD CONSTRAINT fk_channels_subscribers_channel_id FOREIGN KEY (channel_id) REFERENCES channels(id);
+
+
 --
 -- Name: fk_channels_subscribers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY channels_subscribers
     ADD CONSTRAINT fk_channels_subscribers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_cities_state_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY cities
     ADD CONSTRAINT fk_cities_state_id FOREIGN KEY (state_id) REFERENCES states(id);
+
+
 --
 -- Name: fk_contribution_notifications_contribution_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contribution_notifications
     ADD CONSTRAINT fk_contribution_notifications_contribution_id FOREIGN KEY (contribution_id) REFERENCES contributions(id);
+
+
 --
 -- Name: fk_contribution_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contribution_notifications
     ADD CONSTRAINT fk_contribution_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_contributions_country_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT fk_contributions_country_id FOREIGN KEY (country_id) REFERENCES countries(id);
+
+
 --
 -- Name: fk_contributions_donation_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT fk_contributions_donation_id FOREIGN KEY (donation_id) REFERENCES donations(id);
+
+
 --
 -- Name: fk_contributions_origin_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY contributions
     ADD CONSTRAINT fk_contributions_origin_id FOREIGN KEY (origin_id) REFERENCES origins(id);
+
+
 --
 -- Name: fk_credit_cards_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY credit_cards
     ADD CONSTRAINT fk_credit_cards_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_donation_notifications_donation_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY donation_notifications
     ADD CONSTRAINT fk_donation_notifications_donation_id FOREIGN KEY (donation_id) REFERENCES donations(id);
+
+
 --
 -- Name: fk_donation_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY donation_notifications
     ADD CONSTRAINT fk_donation_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_donations_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY donations
     ADD CONSTRAINT fk_donations_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_flexible_project_transitions_flexible_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY flexible_project_transitions
     ADD CONSTRAINT fk_flexible_project_transitions_flexible_project_id FOREIGN KEY (flexible_project_id) REFERENCES flexible_projects(id);
+
+
 --
 -- Name: fk_flexible_projects_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY flexible_projects
     ADD CONSTRAINT fk_flexible_projects_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_payment_notifications_payment_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_notifications
     ADD CONSTRAINT fk_payment_notifications_payment_id FOREIGN KEY (payment_id) REFERENCES payments(id);
+
+
 --
 -- Name: fk_payment_transfers_payment_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_transfers
     ADD CONSTRAINT fk_payment_transfers_payment_id FOREIGN KEY (payment_id) REFERENCES payments(id);
+
+
 --
 -- Name: fk_payment_transfers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_transfers
     ADD CONSTRAINT fk_payment_transfers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_payments_contribution_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payments
     ADD CONSTRAINT fk_payments_contribution_id FOREIGN KEY (contribution_id) REFERENCES contributions(id);
+
+
 --
 -- Name: fk_project_accounts_bank_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_accounts
     ADD CONSTRAINT fk_project_accounts_bank_id FOREIGN KEY (bank_id) REFERENCES banks(id);
+
+
 --
 -- Name: fk_project_accounts_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_accounts
     ADD CONSTRAINT fk_project_accounts_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_project_budgets_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_budgets
     ADD CONSTRAINT fk_project_budgets_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
+-- Name: fk_project_errors_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY project_errors
+    ADD CONSTRAINT fk_project_errors_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_project_notifications_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_notifications
     ADD CONSTRAINT fk_project_notifications_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_project_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_notifications
     ADD CONSTRAINT fk_project_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_project_post_notifications_project_post_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_post_notifications
     ADD CONSTRAINT fk_project_post_notifications_project_post_id FOREIGN KEY (project_post_id) REFERENCES project_posts(id);
+
+
 --
 -- Name: fk_project_post_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_post_notifications
     ADD CONSTRAINT fk_project_post_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_project_reminders_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_reminders
     ADD CONSTRAINT fk_project_reminders_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_project_reminders_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_reminders
     ADD CONSTRAINT fk_project_reminders_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_project_transitions_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_transitions
     ADD CONSTRAINT fk_project_transitions_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_projects_city_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects
     ADD CONSTRAINT fk_projects_city_id FOREIGN KEY (city_id) REFERENCES cities(id);
+
+
 --
 -- Name: fk_projects_origin_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects
     ADD CONSTRAINT fk_projects_origin_id FOREIGN KEY (origin_id) REFERENCES origins(id);
+
+
+--
+-- Name: fk_rdevents_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY rdevents
+    ADD CONSTRAINT fk_rdevents_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
+--
+-- Name: fk_rdevents_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY rdevents
+    ADD CONSTRAINT fk_rdevents_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_redactor_assets_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY redactor_assets
     ADD CONSTRAINT fk_redactor_assets_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_taggings_project_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY taggings
     ADD CONSTRAINT fk_taggings_project_id FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: fk_taggings_tag_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY taggings
     ADD CONSTRAINT fk_taggings_tag_id FOREIGN KEY (tag_id) REFERENCES tags(id);
+
+
 --
 -- Name: fk_user_links_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_links
     ADD CONSTRAINT fk_user_links_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_user_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_notifications
     ADD CONSTRAINT fk_user_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_user_transfer_notifications_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_transfer_notifications
     ADD CONSTRAINT fk_user_transfer_notifications_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_user_transfer_notifications_user_transfer_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_transfer_notifications
     ADD CONSTRAINT fk_user_transfer_notifications_user_transfer_id FOREIGN KEY (user_transfer_id) REFERENCES user_transfers(id);
+
+
 --
 -- Name: fk_user_transfers_user_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY user_transfers
     ADD CONSTRAINT fk_user_transfers_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: fk_users_channel_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY users
     ADD CONSTRAINT fk_users_channel_id FOREIGN KEY (channel_id) REFERENCES channels(id);
+
+
 --
 -- Name: fk_users_country_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY users
     ADD CONSTRAINT fk_users_country_id FOREIGN KEY (country_id) REFERENCES countries(id);
+
+
 --
 -- Name: flexible_projects_state_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY flexible_projects
     ADD CONSTRAINT flexible_projects_state_fkey FOREIGN KEY (state) REFERENCES flexible_project_states(state);
+
+
 --
 -- Name: payment_notifications_backer_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY payment_notifications
     ADD CONSTRAINT payment_notifications_backer_id_fk FOREIGN KEY (contribution_id) REFERENCES contributions(id);
+
+
 --
 -- Name: projects_category_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects
     ADD CONSTRAINT projects_category_id_reference FOREIGN KEY (category_id) REFERENCES categories(id);
+
+
 --
 -- Name: projects_state_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects
     ADD CONSTRAINT projects_state_fkey FOREIGN KEY (state) REFERENCES project_states(state);
+
+
 --
 -- Name: projects_user_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY projects
     ADD CONSTRAINT projects_user_id_reference FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: rewards_project_id_reference; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY rewards
     ADD CONSTRAINT rewards_project_id_reference FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: unsubscribes_project_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY unsubscribes
     ADD CONSTRAINT unsubscribes_project_id_fk FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: unsubscribes_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY unsubscribes
     ADD CONSTRAINT unsubscribes_user_id_fk FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: updates_project_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_posts
     ADD CONSTRAINT updates_project_id_fk FOREIGN KEY (project_id) REFERENCES projects(id);
+
+
 --
 -- Name: updates_user_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY project_posts
     ADD CONSTRAINT updates_user_id_fk FOREIGN KEY (user_id) REFERENCES users(id);
+
+
 --
 -- Name: 1; Type: ACL; Schema: -; Owner: -
 --
 
 REVOKE ALL ON SCHEMA "1" FROM PUBLIC;
+REVOKE ALL ON SCHEMA "1" FROM diogo;
+GRANT ALL ON SCHEMA "1" TO diogo;
 GRANT ALL ON SCHEMA "1" TO catarse;
 GRANT USAGE ON SCHEMA "1" TO admin;
 GRANT USAGE ON SCHEMA "1" TO web_user;
 GRANT USAGE ON SCHEMA "1" TO anonymous;
+
+
 --
 -- Name: public; Type: ACL; Schema: -; Owner: -
 --
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
+REVOKE ALL ON SCHEMA public FROM diogo;
+GRANT ALL ON SCHEMA public TO diogo;
 GRANT ALL ON SCHEMA public TO catarse;
 GRANT ALL ON SCHEMA public TO PUBLIC;
+
+
 --
 -- Name: projects; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
+REVOKE ALL ON TABLE projects FROM diogo;
+GRANT ALL ON TABLE projects TO diogo;
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO PUBLIC;
+
+
 --
 -- Name: flexible_projects; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE flexible_projects FROM PUBLIC;
+REVOKE ALL ON TABLE flexible_projects FROM diogo;
+GRANT ALL ON TABLE flexible_projects TO diogo;
 GRANT ALL ON TABLE flexible_projects TO catarse;
 GRANT SELECT ON TABLE flexible_projects TO admin;
 GRANT SELECT ON TABLE flexible_projects TO web_user;
 GRANT SELECT ON TABLE flexible_projects TO anonymous;
 GRANT SELECT ON TABLE flexible_projects TO PUBLIC;
---
--- Name: project_accounts; Type: ACL; Schema: public; Owner: -
---
 
-REVOKE ALL ON TABLE project_accounts FROM PUBLIC;
-GRANT SELECT ON TABLE project_accounts TO anonymous;
-GRANT SELECT ON TABLE project_accounts TO web_user;
-GRANT SELECT ON TABLE project_accounts TO admin;
+
 --
 -- Name: users; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
+REVOKE ALL ON TABLE users FROM diogo;
+GRANT ALL ON TABLE users TO diogo;
 GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
+
+
 --
 -- Name: users.deactivated_at; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-
+REVOKE ALL(deactivated_at) ON TABLE users FROM diogo;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -6082,11 +8069,14 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE projects FROM PUBLIC;
-REVOKE ALL ON TABLE projects FROM catarse;
+REVOKE ALL ON TABLE projects FROM diogo;
+GRANT ALL ON TABLE projects TO diogo;
 GRANT ALL ON TABLE projects TO catarse;
 GRANT SELECT ON TABLE projects TO anonymous;
 GRANT SELECT ON TABLE projects TO web_user;
 GRANT SELECT ON TABLE projects TO admin;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -6094,28 +8084,143 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE payments FROM PUBLIC;
+REVOKE ALL ON TABLE payments FROM diogo;
+GRANT ALL ON TABLE payments TO diogo;
 GRANT ALL ON TABLE payments TO catarse;
 GRANT SELECT ON TABLE payments TO admin;
+
+
 --
 -- Name: project_reminders; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
+REVOKE ALL ON TABLE project_reminders FROM diogo;
+GRANT ALL ON TABLE project_reminders TO diogo;
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
+
+
+--
+-- Name: balance_transactions; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transactions FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transactions FROM diogo;
+GRANT ALL ON TABLE balance_transactions TO diogo;
+GRANT ALL ON TABLE balance_transactions TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transactions TO web_user;
+GRANT SELECT,INSERT ON TABLE balance_transactions TO admin;
+
+
 SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transactions; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transactions FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transactions FROM diogo;
+GRANT ALL ON TABLE balance_transactions TO diogo;
+GRANT ALL ON TABLE balance_transactions TO catarse;
+GRANT SELECT ON TABLE balance_transactions TO web_user;
+GRANT SELECT ON TABLE balance_transactions TO admin;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transfers; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transfers FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transfers FROM diogo;
+GRANT ALL ON TABLE balance_transfers TO diogo;
+GRANT ALL ON TABLE balance_transfers TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO admin;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO web_user;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: balance_transfers; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balance_transfers FROM PUBLIC;
+REVOKE ALL ON TABLE balance_transfers FROM diogo;
+GRANT ALL ON TABLE balance_transfers TO diogo;
+GRANT ALL ON TABLE balance_transfers TO catarse;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO admin;
+GRANT SELECT,INSERT ON TABLE balance_transfers TO web_user;
+
+
+--
+-- Name: balances; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE balances FROM PUBLIC;
+REVOKE ALL ON TABLE balances FROM diogo;
+GRANT ALL ON TABLE balances TO diogo;
+GRANT ALL ON TABLE balances TO catarse;
+GRANT SELECT ON TABLE balances TO web_user;
+GRANT SELECT ON TABLE balances TO admin;
+
+
+SET search_path = public, pg_catalog;
+
+--
+-- Name: banks; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE banks FROM PUBLIC;
+REVOKE ALL ON TABLE banks FROM diogo;
+GRANT ALL ON TABLE banks TO diogo;
+GRANT ALL ON TABLE banks TO catarse;
+GRANT SELECT ON TABLE banks TO admin;
+GRANT SELECT ON TABLE banks TO web_user;
+
+
+--
+-- Name: project_accounts; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON TABLE project_accounts FROM PUBLIC;
+REVOKE ALL ON TABLE project_accounts FROM diogo;
+GRANT ALL ON TABLE project_accounts TO diogo;
+GRANT ALL ON TABLE project_accounts TO catarse;
+GRANT SELECT ON TABLE project_accounts TO admin;
+GRANT SELECT ON TABLE project_accounts TO web_user;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: bank_accounts; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE bank_accounts FROM PUBLIC;
+REVOKE ALL ON TABLE bank_accounts FROM diogo;
+GRANT ALL ON TABLE bank_accounts TO diogo;
+GRANT ALL ON TABLE bank_accounts TO catarse;
+GRANT SELECT ON TABLE bank_accounts TO admin;
+GRANT SELECT ON TABLE bank_accounts TO web_user;
+
 
 --
 -- Name: categories; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE categories FROM PUBLIC;
-REVOKE ALL ON TABLE categories FROM catarse;
+REVOKE ALL ON TABLE categories FROM diogo;
+GRANT ALL ON TABLE categories TO diogo;
 GRANT ALL ON TABLE categories TO catarse;
 GRANT SELECT ON TABLE categories TO admin;
 GRANT SELECT ON TABLE categories TO web_user;
 GRANT SELECT ON TABLE categories TO anonymous;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -6123,8 +8228,13 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE category_followers FROM PUBLIC;
+REVOKE ALL ON TABLE category_followers FROM diogo;
+GRANT ALL ON TABLE category_followers TO diogo;
+GRANT ALL ON TABLE category_followers TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -6132,31 +8242,36 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE category_followers FROM PUBLIC;
+REVOKE ALL ON TABLE category_followers FROM diogo;
+GRANT ALL ON TABLE category_followers TO diogo;
 GRANT ALL ON TABLE category_followers TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE category_followers TO web_user;
---
--- Name: category_totals; Type: ACL; Schema: 1; Owner: -
---
 
-REVOKE ALL ON TABLE category_totals FROM PUBLIC;
-GRANT ALL ON TABLE category_totals TO catarse;
-GRANT SELECT ON TABLE category_totals TO admin;
+
 --
 -- Name: contribution_details; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE contribution_details FROM PUBLIC;
+REVOKE ALL ON TABLE contribution_details FROM diogo;
+GRANT ALL ON TABLE contribution_details TO diogo;
 GRANT ALL ON TABLE contribution_details TO catarse;
 GRANT SELECT,UPDATE ON TABLE contribution_details TO admin;
+
+
 --
 -- Name: contribution_reports; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE contribution_reports FROM PUBLIC;
+REVOKE ALL ON TABLE contribution_reports FROM diogo;
+GRANT ALL ON TABLE contribution_reports TO diogo;
 GRANT ALL ON TABLE contribution_reports TO catarse;
 GRANT SELECT ON TABLE contribution_reports TO admin;
 GRANT SELECT ON TABLE contribution_reports TO web_user;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -6164,8 +8279,12 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE settings FROM PUBLIC;
+REVOKE ALL ON TABLE settings FROM diogo;
+GRANT ALL ON TABLE settings TO diogo;
 GRANT ALL ON TABLE settings TO catarse;
 GRANT SELECT ON TABLE settings TO admin;
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -6173,23 +8292,35 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM PUBLIC;
+REVOKE ALL ON TABLE contribution_reports_for_project_owners FROM diogo;
+GRANT ALL ON TABLE contribution_reports_for_project_owners TO diogo;
 GRANT ALL ON TABLE contribution_reports_for_project_owners TO catarse;
 GRANT SELECT ON TABLE contribution_reports_for_project_owners TO admin;
+
+
 --
 -- Name: contributions; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE contributions FROM PUBLIC;
+REVOKE ALL ON TABLE contributions FROM diogo;
+GRANT ALL ON TABLE contributions TO diogo;
 GRANT ALL ON TABLE contributions TO catarse;
 GRANT ALL ON TABLE contributions TO admin;
+
+
 --
 -- Name: financial_reports; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE financial_reports FROM PUBLIC;
+REVOKE ALL ON TABLE financial_reports FROM diogo;
+GRANT ALL ON TABLE financial_reports TO diogo;
 GRANT ALL ON TABLE financial_reports TO catarse;
 GRANT SELECT ON TABLE financial_reports TO admin;
 GRANT SELECT ON TABLE financial_reports TO web_user;
+
+
 SET search_path = public, pg_catalog;
 
 --
@@ -6197,9 +8328,13 @@ SET search_path = public, pg_catalog;
 --
 
 REVOKE ALL ON TABLE project_notifications FROM PUBLIC;
+REVOKE ALL ON TABLE project_notifications FROM diogo;
+GRANT ALL ON TABLE project_notifications TO diogo;
 GRANT ALL ON TABLE project_notifications TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_notifications TO admin;
+
+
 SET search_path = "1", pg_catalog;
 
 --
@@ -6207,251 +8342,408 @@ SET search_path = "1", pg_catalog;
 --
 
 REVOKE ALL ON TABLE notifications FROM PUBLIC;
-REVOKE ALL ON TABLE notifications FROM catarse;
+REVOKE ALL ON TABLE notifications FROM diogo;
+GRANT ALL ON TABLE notifications TO diogo;
 GRANT ALL ON TABLE notifications TO catarse;
 GRANT SELECT ON TABLE notifications TO admin;
+
+
 --
 -- Name: user_totals; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE user_totals FROM PUBLIC;
+REVOKE ALL ON TABLE user_totals FROM diogo;
+GRANT ALL ON TABLE user_totals TO diogo;
 GRANT ALL ON TABLE user_totals TO catarse;
 GRANT SELECT ON TABLE user_totals TO anonymous;
 GRANT SELECT ON TABLE user_totals TO admin;
 GRANT SELECT ON TABLE user_totals TO web_user;
+
+
 --
 -- Name: project_contributions; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_contributions FROM PUBLIC;
+REVOKE ALL ON TABLE project_contributions FROM diogo;
+GRANT ALL ON TABLE project_contributions TO diogo;
 GRANT ALL ON TABLE project_contributions TO catarse;
 GRANT SELECT ON TABLE project_contributions TO anonymous;
 GRANT SELECT ON TABLE project_contributions TO web_user;
 GRANT SELECT ON TABLE project_contributions TO admin;
+
+
 --
 -- Name: project_contributions_per_day; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_contributions_per_day FROM PUBLIC;
+REVOKE ALL ON TABLE project_contributions_per_day FROM diogo;
+GRANT ALL ON TABLE project_contributions_per_day TO diogo;
 GRANT ALL ON TABLE project_contributions_per_day TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_day TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_day TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_day TO admin;
+
+
 --
 -- Name: project_contributions_per_location; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_contributions_per_location FROM PUBLIC;
+REVOKE ALL ON TABLE project_contributions_per_location FROM diogo;
+GRANT ALL ON TABLE project_contributions_per_location TO diogo;
 GRANT ALL ON TABLE project_contributions_per_location TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_location TO anonymous;
 GRANT SELECT ON TABLE project_contributions_per_location TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_location TO admin;
+
+
 --
 -- Name: project_contributions_per_ref; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_contributions_per_ref FROM PUBLIC;
+REVOKE ALL ON TABLE project_contributions_per_ref FROM diogo;
+GRANT ALL ON TABLE project_contributions_per_ref TO diogo;
 GRANT ALL ON TABLE project_contributions_per_ref TO catarse;
 GRANT SELECT ON TABLE project_contributions_per_ref TO admin;
 GRANT SELECT ON TABLE project_contributions_per_ref TO web_user;
 GRANT SELECT ON TABLE project_contributions_per_ref TO anonymous;
+
+
 --
 -- Name: project_details; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_details FROM PUBLIC;
+REVOKE ALL ON TABLE project_details FROM diogo;
+GRANT ALL ON TABLE project_details TO diogo;
 GRANT ALL ON TABLE project_details TO catarse;
 GRANT SELECT ON TABLE project_details TO admin;
 GRANT SELECT ON TABLE project_details TO web_user;
 GRANT SELECT ON TABLE project_details TO anonymous;
+
+
 --
 -- Name: project_financials; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_financials FROM PUBLIC;
+REVOKE ALL ON TABLE project_financials FROM diogo;
+GRANT ALL ON TABLE project_financials TO diogo;
 GRANT ALL ON TABLE project_financials TO catarse;
 GRANT SELECT ON TABLE project_financials TO web_user;
 GRANT SELECT ON TABLE project_financials TO admin;
+
+
 --
 -- Name: project_posts_details; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_posts_details FROM PUBLIC;
+REVOKE ALL ON TABLE project_posts_details FROM diogo;
+GRANT ALL ON TABLE project_posts_details TO diogo;
 GRANT ALL ON TABLE project_posts_details TO catarse;
 GRANT SELECT ON TABLE project_posts_details TO admin;
 GRANT SELECT ON TABLE project_posts_details TO web_user;
 GRANT SELECT ON TABLE project_posts_details TO anonymous;
+
+
 --
 -- Name: project_reminders; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_reminders FROM PUBLIC;
+REVOKE ALL ON TABLE project_reminders FROM diogo;
+GRANT ALL ON TABLE project_reminders TO diogo;
 GRANT ALL ON TABLE project_reminders TO catarse;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO web_user;
 GRANT SELECT,INSERT,DELETE ON TABLE project_reminders TO admin;
+
+
 --
 -- Name: project_transfers; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_transfers FROM PUBLIC;
-REVOKE ALL ON TABLE project_transfers FROM catarse;
+REVOKE ALL ON TABLE project_transfers FROM diogo;
+GRANT ALL ON TABLE project_transfers TO diogo;
 GRANT ALL ON TABLE project_transfers TO catarse;
 GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
+
+
 --
 -- Name: project_transitions; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE project_transitions FROM PUBLIC;
-REVOKE ALL ON TABLE project_transitions FROM catarse;
+REVOKE ALL ON TABLE project_transitions FROM diogo;
+GRANT ALL ON TABLE project_transitions TO diogo;
 GRANT ALL ON TABLE project_transitions TO catarse;
 GRANT SELECT ON TABLE project_transitions TO admin;
+GRANT SELECT ON TABLE project_transitions TO web_user;
+GRANT SELECT ON TABLE project_transitions TO anonymous;
+
+
 --
 -- Name: recommendations; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE recommendations FROM PUBLIC;
+REVOKE ALL ON TABLE recommendations FROM diogo;
+GRANT ALL ON TABLE recommendations TO diogo;
 GRANT ALL ON TABLE recommendations TO catarse;
 GRANT SELECT ON TABLE recommendations TO admin;
 GRANT SELECT ON TABLE recommendations TO web_user;
+
+
 --
 -- Name: referral_totals; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE referral_totals FROM PUBLIC;
+REVOKE ALL ON TABLE referral_totals FROM diogo;
+GRANT ALL ON TABLE referral_totals TO diogo;
 GRANT ALL ON TABLE referral_totals TO catarse;
 GRANT SELECT ON TABLE referral_totals TO admin;
+
+
 --
 -- Name: reward_details; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE reward_details FROM PUBLIC;
+REVOKE ALL ON TABLE reward_details FROM diogo;
+GRANT ALL ON TABLE reward_details TO diogo;
 GRANT ALL ON TABLE reward_details TO catarse;
 GRANT SELECT ON TABLE reward_details TO admin;
 GRANT SELECT ON TABLE reward_details TO web_user;
 GRANT SELECT ON TABLE reward_details TO anonymous;
+
+
 --
 -- Name: statistics; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE statistics FROM PUBLIC;
+REVOKE ALL ON TABLE statistics FROM diogo;
+GRANT ALL ON TABLE statistics TO diogo;
 GRANT ALL ON TABLE statistics TO catarse;
 GRANT SELECT ON TABLE statistics TO admin;
 GRANT SELECT ON TABLE statistics TO web_user;
 GRANT SELECT ON TABLE statistics TO anonymous;
+
+
 --
 -- Name: team_members; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE team_members FROM PUBLIC;
+REVOKE ALL ON TABLE team_members FROM diogo;
+GRANT ALL ON TABLE team_members TO diogo;
 GRANT ALL ON TABLE team_members TO catarse;
 GRANT SELECT ON TABLE team_members TO web_user;
 GRANT SELECT ON TABLE team_members TO admin;
 GRANT SELECT ON TABLE team_members TO anonymous;
+
+
 --
 -- Name: team_totals; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE team_totals FROM PUBLIC;
+REVOKE ALL ON TABLE team_totals FROM diogo;
+GRANT ALL ON TABLE team_totals TO diogo;
 GRANT ALL ON TABLE team_totals TO catarse;
 GRANT SELECT ON TABLE team_totals TO admin;
 GRANT SELECT ON TABLE team_totals TO web_user;
 GRANT SELECT ON TABLE team_totals TO anonymous;
+
+
 --
 -- Name: user_credits; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE user_credits FROM PUBLIC;
+REVOKE ALL ON TABLE user_credits FROM diogo;
+GRANT ALL ON TABLE user_credits TO diogo;
 GRANT ALL ON TABLE user_credits TO catarse;
 GRANT SELECT ON TABLE user_credits TO admin;
 GRANT SELECT ON TABLE user_credits TO web_user;
+
+
 --
 -- Name: user_details; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE user_details FROM PUBLIC;
+REVOKE ALL ON TABLE user_details FROM diogo;
+GRANT ALL ON TABLE user_details TO diogo;
 GRANT ALL ON TABLE user_details TO catarse;
 GRANT SELECT ON TABLE user_details TO PUBLIC;
+
+
 --
 -- Name: users; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE users FROM PUBLIC;
+REVOKE ALL ON TABLE users FROM diogo;
+GRANT ALL ON TABLE users TO diogo;
 GRANT ALL ON TABLE users TO catarse;
 GRANT SELECT ON TABLE users TO admin;
+
+
 --
 -- Name: users.deactivated_at; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL(deactivated_at) ON TABLE users FROM PUBLIC;
-
+REVOKE ALL(deactivated_at) ON TABLE users FROM diogo;
 GRANT UPDATE(deactivated_at) ON TABLE users TO admin;
+
+
 --
 -- Name: year_totals; Type: ACL; Schema: 1; Owner: -
 --
 
 REVOKE ALL ON TABLE year_totals FROM PUBLIC;
+REVOKE ALL ON TABLE year_totals FROM diogo;
+GRANT ALL ON TABLE year_totals TO diogo;
 GRANT ALL ON TABLE year_totals TO catarse;
 GRANT SELECT ON TABLE year_totals TO admin;
 GRANT SELECT ON TABLE year_totals TO web_user;
+
+
 SET search_path = public, pg_catalog;
+
+--
+-- Name: balance_transactions_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON SEQUENCE balance_transactions_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE balance_transactions_id_seq FROM diogo;
+GRANT ALL ON SEQUENCE balance_transactions_id_seq TO diogo;
+GRANT ALL ON SEQUENCE balance_transactions_id_seq TO catarse;
+GRANT USAGE ON SEQUENCE balance_transactions_id_seq TO admin;
+GRANT USAGE ON SEQUENCE balance_transactions_id_seq TO web_user;
+
+
+--
+-- Name: balance_transfers_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON SEQUENCE balance_transfers_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE balance_transfers_id_seq FROM diogo;
+GRANT ALL ON SEQUENCE balance_transfers_id_seq TO diogo;
+GRANT ALL ON SEQUENCE balance_transfers_id_seq TO catarse;
+GRANT USAGE ON SEQUENCE balance_transfers_id_seq TO admin;
+GRANT USAGE ON SEQUENCE balance_transfers_id_seq TO web_user;
+
 
 --
 -- Name: category_followers_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON SEQUENCE category_followers_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE category_followers_id_seq FROM diogo;
+GRANT ALL ON SEQUENCE category_followers_id_seq TO diogo;
+GRANT ALL ON SEQUENCE category_followers_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE category_followers_id_seq TO admin;
 GRANT USAGE ON SEQUENCE category_followers_id_seq TO web_user;
+
+
 --
 -- Name: flexible_project_states; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE flexible_project_states FROM PUBLIC;
+REVOKE ALL ON TABLE flexible_project_states FROM diogo;
+GRANT ALL ON TABLE flexible_project_states TO diogo;
 GRANT ALL ON TABLE flexible_project_states TO catarse;
 GRANT SELECT ON TABLE flexible_project_states TO admin;
 GRANT SELECT ON TABLE flexible_project_states TO web_user;
 GRANT SELECT ON TABLE flexible_project_states TO anonymous;
+
+
 --
 -- Name: payment_logs; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE payment_logs FROM PUBLIC;
+REVOKE ALL ON TABLE payment_logs FROM diogo;
+GRANT ALL ON TABLE payment_logs TO diogo;
 GRANT ALL ON TABLE payment_logs TO catarse;
 GRANT SELECT ON TABLE payment_logs TO admin;
 GRANT SELECT ON TABLE payment_logs TO web_user;
+
+
 --
 -- Name: payment_transfers; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE payment_transfers FROM PUBLIC;
+REVOKE ALL ON TABLE payment_transfers FROM diogo;
+GRANT ALL ON TABLE payment_transfers TO diogo;
 GRANT ALL ON TABLE payment_transfers TO catarse;
 GRANT SELECT ON TABLE payment_transfers TO admin;
 GRANT SELECT ON TABLE payment_transfers TO web_user;
+
+
 --
 -- Name: project_notifications_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE project_notifications_id_seq FROM diogo;
+GRANT ALL ON SEQUENCE project_notifications_id_seq TO diogo;
 GRANT ALL ON SEQUENCE project_notifications_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO admin;
 GRANT USAGE ON SEQUENCE project_notifications_id_seq TO web_user;
+
+
 --
 -- Name: project_reminders_id_seq; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE project_reminders_id_seq FROM diogo;
+GRANT ALL ON SEQUENCE project_reminders_id_seq TO diogo;
 GRANT ALL ON SEQUENCE project_reminders_id_seq TO catarse;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO web_user;
 GRANT USAGE ON SEQUENCE project_reminders_id_seq TO admin;
+
+
 --
 -- Name: project_states; Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON TABLE project_states FROM PUBLIC;
+REVOKE ALL ON TABLE project_states FROM diogo;
+GRANT ALL ON TABLE project_states TO diogo;
 GRANT ALL ON TABLE project_states TO catarse;
 GRANT SELECT ON TABLE project_states TO admin;
 GRANT SELECT ON TABLE project_states TO web_user;
 GRANT SELECT ON TABLE project_states TO anonymous;
+
+
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: category_totals; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE category_totals FROM PUBLIC;
+REVOKE ALL ON TABLE category_totals FROM diogo;
+GRANT ALL ON TABLE category_totals TO diogo;
+GRANT ALL ON TABLE category_totals TO catarse;
+GRANT SELECT ON TABLE category_totals TO anonymous;
+GRANT SELECT ON TABLE category_totals TO admin;
+GRANT SELECT ON TABLE category_totals TO web_user;
+
+
 --
 -- PostgreSQL database dump complete
 --

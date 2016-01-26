@@ -7,7 +7,7 @@ exit_code=0
 
 postgrest_bin='unknown'
 unamestr=`uname`
-ver='0.2.12.0'
+ver='0.3.0.3'
 dir='postgrest'
 
 schema_log='logs/schema_load.log'
@@ -46,11 +46,11 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-echo "Initiating PostgREST server..."
-./$dir/$postgrest_bin -d $db -U postgrest -a anonymous -p $port --jwt-secret gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr9C > logs/postgrest.log 2>&1 &
+echo "Initiating PostgREST server ./$dir/$postgrest_bin ..."
+./$dir/$postgrest_bin "postgres://postgrest@localhost/$db" --schema "1" -a anonymous -p $port --jwt-secret gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr9C > logs/postgrest.log 2>&1 &
 
 echo "Running tests..."
-sleep 1
+sleep 2
 for f in test/*.yml
 do
     echo ""
