@@ -18,7 +18,7 @@
 - test:
   - name: "Update an user from Contribution Details as admin"
   - url: "/contribution_details?id=eq.1"
-  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
+  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
   - method: "PATCH"
-  - body: '{"user_id": 2}'
+  - body: '{"user_id": "2"}'
   - expected_status: [204]
