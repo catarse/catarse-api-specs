@@ -10,7 +10,7 @@
 - test:
   - name: "Get as admin"
   - url: "/contribution_details?id=eq.1"
-  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJ1c2VyX2lkIjoiMyJ9.D8Cl62lKWyNzSpdw-35xa4rlIzcGBkjGpkLGxYER5Fo'}
   - expected_status: [200]
   - validators:
     - compare: {jsonpath_mini: '0.user_id', comparator: 'eq', expected: 1}
@@ -18,7 +18,7 @@
 - test:
   - name: "Update an user from Contribution Details as admin"
   - url: "/contribution_details?id=eq.1"
-  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
+  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJpZCI6IjMifQ.tF4tLeHOxMNNoZIMB-T3PlV4zee0GKmexSsN1-zNr80'}
   - method: "PATCH"
-  - body: '{"user_id": 2}'
+  - body: '{"user_id": "2"}'
   - expected_status: [204]

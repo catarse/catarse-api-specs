@@ -1,5 +1,5 @@
 -- Set default connected user to empty string
-ALTER DATABASE :db SET user_vars.user_id TO '';
+ALTER DATABASE :db SET postgrest.claims.user_id TO '';
 
 /*
  * Data for read-only tests
@@ -48,12 +48,12 @@ INSERT INTO public.users (id, email, name, admin) VALUES
 INSERT INTO public.category_followers (category_id, user_id) VALUES
     (1, 1);
 
-INSERT INTO public.projects (id, name, state, user_id, category_id, permalink, headline, uploaded_image, about_html) VALUES
-    (1, 'Rascunho de projeto tudo ou nada', 'draft',  1, 1, 'teste_tudo_ou_nada','headline', 'https::/amazon/some_image.jpg', 'sobre o projeto tudo ou nada'),
-    (2, 'Rascunho de projeto flexível',     'draft',  1, 1, 'teste_flexivel',    'headline', 'https::/amazon/some_image.jpg', 'sobre o projeto flex'),
-    (3, 'Projeto tudo ou nada no ar',       'online', 1, 1, 'tudo_ou_nada',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada'),
-    (4, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex'),
-    (5, 'Projeto tudo ou nada bem sucedido','successful', 1, 1, 'tudo_ou_nada_successful',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido');
+INSERT INTO public.projects (id, city_id, name, state, user_id, category_id, permalink, headline, uploaded_image, about_html) VALUES
+    (1, 1, 'Rascunho de projeto tudo ou nada', 'draft',  1, 1, 'teste_tudo_ou_nada','headline', 'https::/amazon/some_image.jpg', 'sobre o projeto tudo ou nada'),
+    (2, 1, 'Rascunho de projeto flexível',     'draft',  1, 1, 'teste_flexivel',    'headline', 'https::/amazon/some_image.jpg', 'sobre o projeto flex'),
+    (3, 1, 'Projeto tudo ou nada no ar',       'online', 1, 1, 'tudo_ou_nada',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada'),
+    (4, 1, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex'),
+    (5, 1, 'Projeto tudo ou nada bem sucedido','successful', 1, 1, 'tudo_ou_nada_successful',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido');
 
 INSERT INTO public.project_accounts
        (id, project_id, bank_id, email, address_street, address_number, address_city, address_neighbourhood, address_state, address_zip_code, phone_number, agency, agency_digit, account, account_digit, owner_name, owner_document) VALUES
