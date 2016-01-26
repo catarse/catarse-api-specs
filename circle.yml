@@ -8,5 +8,5 @@ dependencies:
 
 test:
   override:
-    - ./api_spec.py run_tests
+    - ./src/run_tests.sh
 
