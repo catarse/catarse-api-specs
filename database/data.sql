@@ -45,6 +45,10 @@ INSERT INTO public.users (id, email, name, admin) VALUES
     (2, 'apoiador@bar.com', 'Apoiador', FALSE),
     (3, 'chuck@norris.com', 'Admin', TRUE);
 
+INSERT INTO public.bank_accounts (id, bank_id, user_id, account, account_digit, agency, agency_digit, owner_name, owner_document) VALUES
+    (1, 1, 1, '11111', '2', '1111', '2', 'Usuario 1', '111.111.111-11'),
+    (2, 1, 2, '22222', '1', '2222', '1', 'Usuario 2', '222.222.222-22');
+
 INSERT INTO public.category_followers (category_id, user_id) VALUES
     (1, 1);
 
