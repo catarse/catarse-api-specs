@@ -8,29 +8,11 @@
   - expected_status: [404]
 
 - test:
-  - name: "Basic POST is not available for anonymous"
-  - url: "/balances_transfers"
-  - method: "POST"
-  - expected_status: [400, 500]
-
-- test:
   - name: "Basic get is available for web_user and should return the balance transfers"
   - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg'}
   - url: "/balance_transfers"
   - validators:
     - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
-
-- test:
-  - name: "Basic POST is available for web_user and should return the transfer"
-  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMiJ9.WZ7sSB1sTCaFoCpbBJ0GnyDNYHeWaZBbRQMypParGEc', 'Prefer': 'return=representation'}
-  - url: "/balance_transfers"
-  - method: "POST"
-  - body: '{"user_id": 2}'
-  - expected_status: [200, 201]
-  - validators:
-    - compare: {jsonpath_mini: 'user_id', comparator: 'str_eq', expected: '2'}
-    - compare: {jsonpath_mini: 'amount', comparator: 'str_eq', expected: '10'}
-    - compare: {jsonpath_mini: 'state', comparator: 'str_eq', expected: 'pending'}
 
 - test:
   - name: "Basic get is available only for web users when see they balance transfers only"
@@ -39,12 +21,24 @@
   - validators:
     - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
 
-- test:
-  - name: "Basic POST is available for web_user and should return the transfer when is they user"
-  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg'}
-  - url: "/balance_transfers"
-  - method: "POST"
-  - body: '{"user_id": 2}'
-  - validators:
-    - compare: {jsonpath_mini: 'message', comparator: 'str_eq', expected: 'insufficient privileges to insert balance_transactions'}
-  - expected_status: [400, 500]
+#- test:
+#  - name: "Basic POST is available for web_user and should return the transfer"
+#  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMiJ9.WZ7sSB1sTCaFoCpbBJ0GnyDNYHeWaZBbRQMypParGEc', 'Prefer': 'return=representation'}
+#  - url: "/balance_transfers"
+#  - method: "POST"
+#  - body: '{"user_id": 2}'
+#  - expected_status: [200, 201]
+#  - validators:
+#    - compare: {jsonpath_mini: 'user_id', comparator: 'str_eq', expected: '2'}
+#    - compare: {jsonpath_mini: 'amount', comparator: 'str_eq', expected: '10'}
+#    - compare: {jsonpath_mini: 'state', comparator: 'str_eq', expected: 'pending'}
+
+#- test:
+#  - name: "Basic POST is available for web_user and should return the transfer when is they user"
+#  - headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg'}
+#  - url: "/balance_transfers"
+#  - method: "POST"
+#  - body: '{"user_id": 2}'
+#  - validators:
+#    - compare: {jsonpath_mini: 'message', comparator: 'str_eq', expected: 'insufficient privileges to insert balance_transactions'}
+#  - expected_status: [400, 500]
