@@ -1,0 +1,48 @@
+---
+- config:
+  - testset: "project_accounts"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/project_accounts"
+  - expected_status: [404]
+
+- test:
+  - name: "GET should return the project account data from current_user"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg'}
+  - url: "/project_accounts?project_id=eq.5"
+  - expected_status: [200]
+  - validators:
+    - compare: {jsonpath_mini: '0.bank_name', comparator: 'str_eq', expected: 'Bradesco'}
+    - compare: {jsonpath_mini: '0.bank_code', comparator: 'str_eq', expected: '237'}
+    - compare: {jsonpath_mini: '0.account', comparator: 'str_eq', expected: '1234'}
+    - compare: {jsonpath_mini: '0.agency', comparator: 'str_eq', expected: '1321'}
+    - compare: {jsonpath_mini: '0.owner_name', comparator: 'str_eq', expected: 'Owner name'}
+    - compare: {jsonpath_mini: '0.error_reason', comparator: 'str_eq', expected: 'None'}
+    - compare: {jsonpath_mini: '0.transfer_state', comparator: 'str_eq', expected: 'None'}
+    - compare: {jsonpath_mini: '1', comparator: 'str_eq', expected: 'None'}
+
+- test:
+  - name: "GET with another user should nothing when is not owner"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMiJ9.WZ7sSB1sTCaFoCpbBJ0GnyDNYHeWaZBbRQMypParGEc'}
+  - url: "/project_accounts?project_id=eq.5"
+  - expected_status: [200]
+  - validators:
+    - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
+
+#- test:
+#  - name: "POST to approve project account and request funds"
+#  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json'}
+#  - url: "/project_accounts?project_id=eq.5"
+#  - expected_status: [200]
+#  - method: "POST"
+#  - body: '{"project_id": "5"}'
+#  - validators:
+#    - compare: {jsonpath_mini: '0.bank_name', comparator: 'str_eq', expected: 'Bradesco'}
+#    - compare: {jsonpath_mini: '0.bank_code', comparator: 'str_eq', expected: '237'}
+#    - compare: {jsonpath_mini: '0.account', comparator: 'str_eq', expected: '1234'}
+#    - compare: {jsonpath_mini: '0.agency', comparator: 'str_eq', expected: '1321'}
+#    - compare: {jsonpath_mini: '0.owner_name', comparator: 'str_eq', expected: 'Owner name'}
+#    - compare: {jsonpath_mini: '0.error_reason', comparator: 'str_eq', expected: 'None'}
+#    - compare: {jsonpath_mini: '0.transfer_state', comparator: 'str_eq', expected: 'pending'}
+#    - compare: {jsonpath_mini: '1', comparator: 'str_eq', expected: 'None'}
