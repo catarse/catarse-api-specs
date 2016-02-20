@@ -8,21 +8,16 @@
   - expected_status: [404]
 
 - test:
-  - name: "Basic get is available for web_user and should return the bank_account from the last successful project"
+  - name: "Basic get is available for web_user and should return the current user bank_account"
   - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg'}
   - url: "/bank_accounts"
   - expected_status: [200]
   - validators:
     - compare: {jsonpath_mini: '0.bank_name', comparator: 'str_eq', expected: 'Bradesco'}
-    - compare: {jsonpath_mini: '0.account', comparator: 'str_eq', expected: '1234'}
-
-- test:
-  - name: "when user does not have any successful project should not show any bank_account"
-  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMiJ9.WZ7sSB1sTCaFoCpbBJ0GnyDNYHeWaZBbRQMypParGEc'}
-  - url: "/bank_accounts"
-  - expected_status: [200]
-  - validators:
-    - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
+    - compare: {jsonpath_mini: '0.account', comparator: 'str_eq', expected: '11111'}
+    - compare: {jsonpath_mini: '0.agency', comparator: 'str_eq', expected: '1111'}
+    - compare: {jsonpath_mini: '0.owner_name', comparator: 'str_eq', expected: 'Usuario 1'}
+    - compare: {jsonpath_mini: '1', comparator: 'str_eq', expected: 'None'}
 
 - test:
   - name: "Basic get is available for web_user but can't filter by another user"
