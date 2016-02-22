@@ -12,7 +12,8 @@
     - compare: {jsonpath_mini: '0.permalink', comparator: 'str_eq', expected: 'tudo_ou_nada'}
     - compare: {jsonpath_mini: "1.permalink", comparator: "str_eq", expected: 'tudo_ou_nada_successful_account_error'}
     - compare: {jsonpath_mini: "2.permalink", comparator: "str_eq", expected: 'tudo_ou_nada_successful'}
-    - compare: {jsonpath_mini: "3.permalink", comparator: "str_eq", expected: 'None'}
+    - compare: {jsonpath_mini: "3.permalink", comparator: "str_eq", expected: 'aon_successful_with_balances'}
+    - compare: {jsonpath_mini: "4.permalink", comparator: "str_eq", expected: 'None'}
 
 - test:
   - name: "Trigram search"
