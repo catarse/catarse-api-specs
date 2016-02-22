@@ -58,7 +58,8 @@ INSERT INTO public.projects (id, city_id, name, state, user_id, category_id, per
     (3, 1, 'Projeto tudo ou nada no ar',       'online', 1, 1, 'tudo_ou_nada',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada'),
     (4, 1, 'Projeto flexível no ar',           'draft', 1, 1, 'flexivel',          'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto flex'),
     (5, 1, 'Projeto tudo ou nada bem sucedido','successful', 1, 1, 'tudo_ou_nada_successful',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido'),
-    (6, 1, 'Projeto tudo ou nada bem sucedido com erro na conta','successful', 1, 1, 'tudo_ou_nada_successful_account_error',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido com erro');
+    (6, 1, 'Projeto tudo ou nada bem sucedido com erro na conta','successful', 1, 1, 'tudo_ou_nada_successful_account_error',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido com erro'),
+    (7, 1, 'Projeto tudo ou nada bem sucedido','successful', 1, 1, 'aon_successful_with_balances',      'headline', 'https::/amazon/some_image.jpg', 'captando no meu projeto tudo ou nada bem sucedido');
 
 INSERT INTO public.project_accounts
        (id, project_id, bank_id, email, address_street, address_number, address_city, address_neighbourhood, address_state, address_zip_code, phone_number, agency, agency_digit, account, account_digit, owner_name, owner_document) VALUES
@@ -83,12 +84,17 @@ REFRESH MATERIALIZED VIEW "1".user_totals;
 REFRESH MATERIALIZED VIEW "1".statistics;
 
 INSERT INTO balance_transactions (project_id, event_name, user_id, amount) VALUES
-       (5, 'successful_project_pledged', 1, 100),
-       (5, 'catarse_project_service_fee', 1, -13);
+       (7, 'successful_project_pledged', 1, 100),
+       (7, 'catarse_project_service_fee', 1, -13);
 
 INSERT INTO balance_transactions (event_name, user_id, amount) VALUES
        ('for_fun_credits', 2, 10);
 
+INSERT INTO contributions (id, project_id, user_id, value, payer_email) VALUES
+       (2, 5, 1, 10, 'foo@bar.com');
+
+INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, value) VALUES
+       (2, 2, 'paid', 'key 2', 'Payment Gateway', 'Credit Card', 10);
 
 /*
  * Create all data that will be modified bellow
@@ -105,7 +111,6 @@ INSERT INTO contributions (id, project_id, user_id, value, payer_email) VALUES
 INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, value) VALUES
     (1, 1, 'paid', 'key 1', 'Payment Gateway', 'Credit Card', 10);
 
--- payment_accounts.yml
-
+-- project_accounts.yml
 INSERT INTO public.project_account_errors (id, project_account_id, reason, solved, created_at) VALUES
     (1, 2, 'invalid bank', FALSE, now());
