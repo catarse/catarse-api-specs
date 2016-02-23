@@ -113,4 +113,4 @@ INSERT INTO payments (id, contribution_id, state, key, gateway, payment_method, 
 
 -- project_accounts.yml
 INSERT INTO public.project_account_errors (id, project_account_id, reason, solved, created_at) VALUES
-    (1, 2, 'invalid bank', FALSE, now());
+    (999, 2, 'invalid bank', FALSE, now());

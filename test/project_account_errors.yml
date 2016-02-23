@@ -1,0 +1,81 @@
+---
+- config:
+  - testset: "project_account_errors"
+
+- test:
+  - name: "Basic get is not available for anonymous"
+  - url: "/project_account_errors"
+  - expected_status: [404]
+
+- test:
+  - name: "GET should return the project error"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [200]
+  - validators:
+    - compare: {jsonpath_mini: '0.solved', comparator: 'str_eq', expected: 'False'}
+    - compare: {jsonpath_mini: '0.reason', comparator: 'str_eq', expected: 'invalid bank'}
+    - compare: {jsonpath_mini: '0.project_id', comparator: 'str_eq', expected: '6'}
+
+- test:
+  - name: "GET can't show error from another project"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMiJ9.WZ7sSB1sTCaFoCpbBJ0GnyDNYHeWaZBbRQMypParGEc', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.5"
+  - expected_status: [200]
+  - validators:
+    - compare: {jsonpath_mini: '0', comparator: 'str_eq', expected: 'None'}
+
+- test:
+  - name: "DELETE is not available for anonymous"
+  - headers: {'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [404]
+  - method: "DELETE"
+  - body: '{"project_account_id": "2"}'
+
+- test:
+  - name: "DELETE is not available for web_user"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [404]
+  - method: "DELETE"
+  - body: '{"project_account_id": "2"}'
+
+- test:
+  - name: "DELETE is only avaiable for admin and should solve error"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4iLCJ1c2VyX2lkIjoiMyJ9.D8Cl62lKWyNzSpdw-35xa4rlIzcGBkjGpkLGxYER5Fo', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [204]
+  - method: "DELETE"
+  - body: '{"project_account_id": "2"}'
+
+- test:
+  - name: "GET error resolved after DELETE"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [200]
+  - validators:
+    - compare: {jsonpath_mini: '0.solved', comparator: 'str_eq', expected: 'True'}
+    - compare: {jsonpath_mini: '0.reason', comparator: 'str_eq', expected: 'invalid bank'}
+    - compare: {jsonpath_mini: '0.project_id', comparator: 'str_eq', expected: '6'}
+
+- test:
+  - name: "POST is not available for anonymous"
+  - headers: {'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [404]
+  - method: "POST"
+  - body: '{"project_id": "6", "reason":"foo"}'
+
+- test:
+  - name: "POST should create an error on bank data for project"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_account_errors?project_id=eq.6"
+  - expected_status: [200, 201, 204]
+  - method: "POST"
+  - body: '{"project_id": "6", "reason":"invalid data"}'
+  - validators:
+    - compare: {jsonpath_mini: 'solved', comparator: 'str_eq', expected: 'False'}
+    - compare: {jsonpath_mini: 'reason', comparator: 'str_eq', expected: 'invalid data'}
+    - compare: {jsonpath_mini: 'project_id', comparator: 'str_eq', expected: '6'}
+
