@@ -440,10 +440,10 @@ CREATE FUNCTION add_error_reason() RETURNS trigger
             END IF;
 
             INSERT INTO public.project_account_errors
-                (project_account_id, reason, solved) VALUES
-                (v_project_acc_id, NEW.reason, false);
+                (project_account_id, reason, solved, created_at) VALUES
+                (v_project_acc_id, NEW.reason, false, now());
 
-            SELECT * FROM "1".project_account_errors WHERE project_id = NEW.project_id INTO v_error;
+            SELECT * FROM "1".project_account_errors WHERE project_id = NEW.project_id AND NOT solved INTO v_error;
 
             RETURN v_error;
         END;
@@ -1302,7 +1302,7 @@ CREATE FUNCTION project_checks_before_transfer() RETURNS trigger
                 SELECT true FROM "1".project_accounts pa
                 WHERE pa.error_reason IS NOT NULL AND pa.project_id = NEW.project_id
             ) THEN
-                RAISE EXCEPTION 'project account has an error';
+                RAISE EXCEPTION 'project account have unsolved error';
             END IF;
 
             RETURN NULL;
@@ -1506,11 +1506,13 @@ CREATE FUNCTION solve_error_reason() RETURNS trigger
             END IF;
 
             UPDATE public.project_account_errors
-                SET solved=true
-                WHERE project_account_id = v_project_acc.id;
+                SET solved=true,
+                    solved_at=now()
+                WHERE project_account_id = v_project_acc.id AND not solved;
 
             SELECT * FROM "1".project_account_errors 
-                WHERE project_account_id = v_project_acc.id INTO v_error;
+                WHERE project_account_id = v_project_acc.id
+                AND solved ORDER BY created_at DESC LIMIT 1 INTO v_error;
 
             RETURN v_error;
         END;
@@ -2559,9 +2561,9 @@ CREATE TABLE project_account_errors (
     project_account_id integer NOT NULL,
     reason text NOT NULL,
     solved boolean DEFAULT false,
-    created_at timestamp without time zone DEFAULT '2016-02-22 13:53:01.960475'::timestamp without time zone,
-    updated_at timestamp without time zone,
-    solved_at timestamp without time zone
+    solved_at timestamp without time zone,
+    created_at timestamp without time zone,
+    updated_at timestamp without time zone
 );
 
 
@@ -2607,9 +2609,12 @@ CREATE VIEW project_account_errors AS
     pae.project_account_id,
     pae.reason,
     pae.solved,
+    public.zone_timestamp(pae.solved_at) AS zone_timestamp,
     public.zone_timestamp(pae.created_at) AS created_at
-   FROM (public.project_account_errors pae
-     JOIN public.project_accounts pa ON ((pa.id = pae.project_account_id)));
+   FROM ((public.project_account_errors pae
+     JOIN public.project_accounts pa ON ((pa.id = pae.project_account_id)))
+     JOIN public.projects p ON ((p.id = pa.project_id)))
+  WHERE public.is_owner_or_admin(p.user_id);
 
 
 --
@@ -4421,7 +4426,7 @@ CREATE TABLE rdevents (
     project_id integer,
     event_name text NOT NULL,
     metadata json,
-    created_at timestamp without time zone DEFAULT '2016-02-18 15:01:29.752747'::timestamp without time zone,
+    created_at timestamp without time zone DEFAULT '2016-02-23 12:09:39.287592'::timestamp without time zone,
     updated_at timestamp without time zone
 );
 
@@ -5777,13 +5782,6 @@ ALTER TABLE ONLY users
 
 
 SET search_path = "1", pg_catalog;
-
---
--- Name: category_totals_uidx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX category_totals_uidx ON category_totals USING btree (category_id);
-
 
 --
 -- Name: statistics_uidx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
