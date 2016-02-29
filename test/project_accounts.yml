@@ -46,3 +46,23 @@
     - compare: {jsonpath_mini: 'error_reason', comparator: 'str_eq', expected: 'None'}
     - compare: {jsonpath_mini: 'transfer_state', comparator: 'str_eq', expected: 'pending'}
     - compare: {jsonpath_mini: '1', comparator: 'str_eq', expected: 'None'}
+
+- test:
+  - name: "POST to a project that is not successful"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_accounts?project_id=eq.4"
+  - expected_status: [500]
+  - method: "POST"
+  - body: '{"project_id": "4"}'
+  - validators:
+    - compare: {jsonpath_mini: 'message', comparator: 'str_eq', expected: 'project need to be successful'}
+
+- test:
+  - name: "POST to a project that is have an error on account"
+  - headers: {'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoid2ViX3VzZXIiLCJ1c2VyX2lkIjoiMSJ9.dEUw0q-niKR1r5UM6DbgCjThRVBSMZH02pT93DcmFwg', 'Content-type': 'application/json', 'Prefer': 'return=representation'}
+  - url: "/project_accounts?project_id=eq.8"
+  - expected_status: [500]
+  - method: "POST"
+  - body: '{"project_id": "8"}'
+  - validators:
+    - compare: {jsonpath_mini: 'message', comparator: 'str_eq', expected: 'project account have unsolved error'}
