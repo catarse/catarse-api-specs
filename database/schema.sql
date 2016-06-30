@@ -413,7 +413,7 @@ SET search_path = public, pg_catalog;
 --
 
 CREATE FUNCTION add_error_reason() RETURNS trigger
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql
     AS $$
         DECLARE
             v_error "1".project_account_errors;
@@ -431,7 +431,7 @@ CREATE FUNCTION add_error_reason() RETURNS trigger
             SELECT * FROM public.projects
                 WHERE id = NEW.project_id INTO v_project;
 
-            IF v_error IS NOT NULL THEN
+            IF v_error.project_id IS NOT NULL THEN
                 RAISE EXCEPTION 'project account already have an error unsolved';
             END IF;
 
@@ -440,10 +440,10 @@ CREATE FUNCTION add_error_reason() RETURNS trigger
             END IF;
 
             INSERT INTO public.project_account_errors
-                (project_account_id, reason, solved) VALUES
-                (v_project_acc_id, NEW.reason, false);
+                (project_account_id, reason, solved, created_at) VALUES
+                (v_project_acc_id, NEW.reason, false, now());
 
-            SELECT * FROM "1".project_account_errors WHERE project_id = NEW.project_id INTO v_error;
+            SELECT * FROM "1".project_account_errors WHERE project_id = NEW.project_id AND NOT solved INTO v_error;
 
             RETURN v_error;
         END;
@@ -455,12 +455,13 @@ CREATE FUNCTION add_error_reason() RETURNS trigger
 --
 
 CREATE FUNCTION approve_project_account() RETURNS trigger
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql
     AS $$
         DECLARE
             v_project public.projects;
             v_project_transfer "1".project_transfers;
             v_balance_transfer public.balance_transfers;
+            v_project_acc "1".project_accounts;
         BEGIN
             SELECT * FROM projects
                 WHERE id = NEW.project_id INTO v_project;
@@ -478,6 +479,9 @@ CREATE FUNCTION approve_project_account() RETURNS trigger
                 (v_project.user_id, v_project.id, v_project_transfer.total_amount, now())
                 RETURNING * INTO v_balance_transfer;
 
+            SELECT * FROM "1".project_accounts WHERE project_id = v_project.id
+                INTO v_project_acc;
+
             -- create balance transactions
             INSERT INTO public.balance_transactions
                 (project_id, user_id, balance_transfer_id, event_name, amount, created_at) VALUES
@@ -488,16 +492,16 @@ CREATE FUNCTION approve_project_account() RETURNS trigger
             IF v_project_transfer.pcc_tax > 0 THEN
                 INSERT INTO public.balance_transactions
                     (project_id, user_id, event_name, amount, created_at) VALUES
-                    (v_project.id, v_project.user_id, null, 'pcc_tax_project', v_project_transfer.pcc_tax, now());
+                    (v_project.id, v_project.user_id, 'pcc_tax_project', v_project_transfer.pcc_tax, now());
             END IF;
 
             IF v_project_transfer.irrf_tax > 0 THEN
                 INSERT INTO public.balance_transactions
                     (project_id, user_id, event_name, amount, created_at) VALUES
-                    (v_project.id, v_project.user_id, null, 'irrf_tax_project', v_project_transfer.irrf_tax, now());
+                    (v_project.id, v_project.user_id, 'irrf_tax_project', v_project_transfer.irrf_tax, now());
             END IF;
 
-            RETURN (SELECT * FROM "1".project_accounts WHERE project_id = v_project.id);
+            RETURN v_project_acc;
         END;
     $$;
 
@@ -1298,8 +1302,10 @@ CREATE FUNCTION project_checks_before_transfer() RETURNS trigger
                 SELECT true FROM "1".project_accounts pa
                 WHERE pa.error_reason IS NOT NULL AND pa.project_id = NEW.project_id
             ) THEN
-                RAISE EXCEPTION 'project account has an error';
+                RAISE EXCEPTION 'project account have unsolved error';
             END IF;
+
+            RETURN NULL;
         END;
     $$;
 
@@ -1478,29 +1484,35 @@ CREATE FUNCTION sold_out(reward rewards) RETURNS boolean
 --
 
 CREATE FUNCTION solve_error_reason() RETURNS trigger
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql
     AS $$
         DECLARE
             v_error "1".project_account_errors;
             v_project public.projects;
-            v_project_acc_id integer;
+            v_project_acc public.project_accounts;
         BEGIN
-            SELECT id FROM public.project_accounts
-                WHERE project_id = NEW.project_id LIMIT 1
-                INTO v_project_acc_id;
+            SELECT * FROM public.project_accounts
+                WHERE id = OLD.project_account_id INTO v_project_acc;
+
+            IF v_project_acc.project_id IS NULL THEN
+                RAISE EXCEPTION 'invalid project_account';
+            END IF;
 
             SELECT * FROM public.projects
-                WHERE id = NEW.project_id INTO v_project;
+                WHERE id = v_project_acc.project_id INTO v_project;
 
             IF NOT public.is_owner_or_admin(v_project.user_id) THEN
-                RAISE EXCEPTION 'insufficient privileges to insert on project_errors_accounts';
+                RAISE EXCEPTION 'insufficient privileges to delete on project_errors_accounts';
             END IF;
 
             UPDATE public.project_account_errors
-                SET solved=true
-                WHERE project_id = v_project.id;
+                SET solved=true,
+                    solved_at=now()
+                WHERE project_account_id = v_project_acc.id AND not solved;
 
-            SELECT * FROM "1".project_account_errors WHERE project_id = NEW.project_id INTO v_error;
+            SELECT * FROM "1".project_account_errors 
+                WHERE project_account_id = v_project_acc.id
+                AND solved ORDER BY created_at DESC LIMIT 1 INTO v_error;
 
             RETURN v_error;
         END;
@@ -2549,6 +2561,7 @@ CREATE TABLE project_account_errors (
     project_account_id integer NOT NULL,
     reason text NOT NULL,
     solved boolean DEFAULT false,
+    solved_at timestamp without time zone,
     created_at timestamp without time zone,
     updated_at timestamp without time zone
 );
@@ -2596,9 +2609,12 @@ CREATE VIEW project_account_errors AS
     pae.project_account_id,
     pae.reason,
     pae.solved,
+    public.zone_timestamp(pae.solved_at) AS zone_timestamp,
     public.zone_timestamp(pae.created_at) AS created_at
-   FROM (public.project_account_errors pae
-     JOIN public.project_accounts pa ON ((pa.id = pae.project_account_id)));
+   FROM ((public.project_account_errors pae
+     JOIN public.project_accounts pa ON ((pa.id = pae.project_account_id)))
+     JOIN public.projects p ON ((p.id = pa.project_id)))
+  WHERE public.is_owner_or_admin(p.user_id);
 
 
 --
@@ -2868,7 +2884,8 @@ CREATE VIEW project_transfers AS
     public.pcc_tax(p.*) AS pcc_tax,
     (((pt.paid_pledged - public.total_catarse_fee(p.*)) + public.irrf_tax(p.*)) + public.pcc_tax(p.*)) AS total_amount
    FROM (public.projects p
-     LEFT JOIN project_totals pt ON ((pt.project_id = p.id)));
+     LEFT JOIN project_totals pt ON ((pt.project_id = p.id)))
+  WHERE public.is_owner_or_admin(p.user_id);
 
 
 SET search_path = public, pg_catalog;
@@ -4409,7 +4426,7 @@ CREATE TABLE rdevents (
     project_id integer,
     event_name text NOT NULL,
     metadata json,
-    created_at timestamp without time zone DEFAULT '2016-02-18 15:01:29.752747'::timestamp without time zone,
+    created_at timestamp without time zone DEFAULT '2016-02-23 12:09:39.287592'::timestamp without time zone,
     updated_at timestamp without time zone
 );
 
@@ -5765,13 +5782,6 @@ ALTER TABLE ONLY users
 
 
 SET search_path = "1", pg_catalog;
-
---
--- Name: category_totals_uidx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
---
-
-CREATE UNIQUE INDEX category_totals_uidx ON category_totals USING btree (category_id);
-
 
 --
 -- Name: statistics_uidx; Type: INDEX; Schema: 1; Owner: -; Tablespace: 
@@ -7574,6 +7584,21 @@ GRANT SELECT ON TABLE projects TO admin;
 GRANT SELECT ON TABLE projects TO PUBLIC;
 
 
+SET search_path = "1", pg_catalog;
+
+--
+-- Name: project_totals; Type: ACL; Schema: 1; Owner: -
+--
+
+REVOKE ALL ON TABLE project_totals FROM PUBLIC;
+REVOKE ALL ON TABLE project_totals FROM catarse;
+GRANT ALL ON TABLE project_totals TO catarse;
+GRANT SELECT ON TABLE project_totals TO web_user;
+GRANT SELECT ON TABLE project_totals TO admin;
+
+
+SET search_path = public, pg_catalog;
+
 --
 -- Name: flexible_projects; Type: ACL; Schema: public; Owner: -
 --
@@ -7857,7 +7882,7 @@ SET search_path = public, pg_catalog;
 REVOKE ALL ON TABLE project_account_errors FROM PUBLIC;
 REVOKE ALL ON TABLE project_account_errors FROM catarse;
 GRANT ALL ON TABLE project_account_errors TO catarse;
-GRANT SELECT,INSERT,DELETE ON TABLE project_account_errors TO admin;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE project_account_errors TO admin;
 GRANT SELECT,INSERT,DELETE ON TABLE project_account_errors TO web_user;
 
 
@@ -7892,8 +7917,8 @@ GRANT SELECT,INSERT ON TABLE project_account_errors TO web_user;
 REVOKE ALL ON TABLE project_accounts FROM PUBLIC;
 REVOKE ALL ON TABLE project_accounts FROM catarse;
 GRANT ALL ON TABLE project_accounts TO catarse;
-GRANT SELECT ON TABLE project_accounts TO admin;
-GRANT SELECT ON TABLE project_accounts TO web_user;
+GRANT SELECT,INSERT ON TABLE project_accounts TO admin;
+GRANT SELECT,INSERT ON TABLE project_accounts TO web_user;
 
 
 --
@@ -7999,6 +8024,7 @@ REVOKE ALL ON TABLE project_transfers FROM PUBLIC;
 REVOKE ALL ON TABLE project_transfers FROM catarse;
 GRANT ALL ON TABLE project_transfers TO catarse;
 GRANT SELECT,UPDATE ON TABLE project_transfers TO admin;
+GRANT SELECT ON TABLE project_transfers TO web_user;
 
 
 --
